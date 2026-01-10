@@ -1,11 +1,11 @@
 "use client";
 
-import LoginPage from "./login";
+import React, {useEffect} from 'react'
 
 const page = () => {
   return (
     <div>
-      <LoginPage />
+      page
     </div>
   )
 }
