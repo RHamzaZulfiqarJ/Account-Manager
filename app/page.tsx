@@ -1,8 +1,12 @@
 "use client";
 
+import LoginPage from "./login";
+
 const page = () => {
   return (
-    <div>page</div>
+    <div>
+      <LoginPage />
+    </div>
   )
 }
 
