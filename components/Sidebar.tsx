@@ -1,0 +1,124 @@
+"use client"
+
+import { motion } from "framer-motion"
+import {
+  LayoutDashboard,
+  Calendar,
+  BarChart3,
+  Settings,
+  PlusCircle,
+  Share2,
+  Layers,
+  LogOut,
+} from "lucide-react"
+import { usePathname, useRouter } from "next/navigation"
+
+const navItems = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/publishing", label: "Publishing", icon: Calendar },
+  { href: "/analytics", label: "Analytics", icon: BarChart3 },
+]
+
+export default function Sidebar() {
+  const pathname = usePathname()
+  const router = useRouter()
+
+  const handleLogout = () => {
+    document.cookie = "auth=; Max-Age=0; path=/"
+    router.push("/")
+  }
+
+  return (
+    <motion.aside
+      initial={{ x: -100, opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      className="w-64 glass border-r border-white/5 h-screen sticky top-0 hidden md:flex flex-col z-50"
+    >
+      {/* Logo */}
+      <div className="p-8">
+        <div
+          className="flex items-center gap-3 text-purple-500 mb-10 cursor-pointer"
+          onClick={() => router.push("/")}
+        >
+          <div className="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/20">
+            <Share2 className="text-white w-6 h-6" />
+          </div>
+          <span className="font-bold text-xl text-white">
+            SproutPulse
+          </span>
+        </div>
+
+        {/* Navigation */}
+        <nav className="space-y-2">
+          {navItems.map((item) => {
+            const isActive = pathname === item.href
+
+            return (
+              <button
+                key={item.href}
+                onClick={() => router.push(item.href)}
+                className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300 group ${
+                  isActive
+                    ? "bg-purple-600/10 text-purple-400 border border-purple-500/20"
+                    : "text-gray-400 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                <item.icon
+                  className={`w-5 h-5 transition-transform group-hover:scale-110 ${
+                    isActive
+                      ? "text-purple-400"
+                      : "text-gray-500"
+                  }`}
+                />
+
+                <span className="font-medium">
+                  {item.label}
+                </span>
+
+                {isActive && (
+                  <motion.div
+                    layoutId="active"
+                    className="ml-auto w-1.5 h-1.5 rounded-full bg-purple-500"
+                  />
+                )}
+              </button>
+            )
+          })}
+        </nav>
+
+        {/* Teams */}
+        <div className="mt-12 space-y-2">
+          <h4 className="px-4 text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-4">
+            Teams
+          </h4>
+
+          <button className="w-full flex items-center gap-4 px-4 py-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all">
+            <Layers className="w-4 h-4" />
+            <span className="text-sm">Marketing Team</span>
+          </button>
+
+          <button className="w-full flex items-center gap-4 px-4 py-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all">
+            <Settings className="w-4 h-4" />
+            <span className="text-sm">Workflow Settings</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Bottom actions */}
+      <div className="mt-auto p-6 space-y-3">
+        <button className="w-full bg-purple-600 hover:bg-purple-500 text-white font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-purple-600/20 active:scale-95 transition-all">
+          <PlusCircle className="w-5 h-5" />
+          <span>New Post</span>
+        </button>
+
+        <button
+          onClick={handleLogout}
+          className="w-full text-gray-500 hover:text-rose-400 hover:bg-rose-500/5 py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all"
+        >
+          <LogOut className="w-4 h-4" />
+          <span className="text-sm font-medium">Logout</span>
+        </button>
+      </div>
+    </motion.aside>
+  )
+}
