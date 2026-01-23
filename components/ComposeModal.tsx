@@ -4,14 +4,9 @@ import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   X,
-  Image,
-  Video,
-  Link,
-  Sparkles,
   Send,
   Calendar,
 } from "lucide-react"
-import { generateCaption } from "@/services/geminiService"
 
 interface ComposeModalProps {
   isOpen: boolean
@@ -23,26 +18,7 @@ export default function ComposeModal({
   onClose,
 }: ComposeModalProps) {
   const [content, setContent] = useState("")
-  const [isGenerating, setIsGenerating] = useState(false)
   const [platform, setPlatform] = useState("instagram")
-
-  const handleAIGenerate = async () => {
-    setIsGenerating(true)
-
-    try {
-      const prompt =
-        content ||
-        "Create a catchy social media caption for a summer sale."
-
-      const suggestion = await generateCaption(prompt)
-
-      if (suggestion) setContent(suggestion)
-    } catch (error) {
-      console.error("AI generation failed:", error)
-    } finally {
-      setIsGenerating(false)
-    }
-  }
 
   return (
     <AnimatePresence>
@@ -110,23 +86,6 @@ export default function ComposeModal({
                   placeholder="What's happening? Share something amazing..."
                   className="w-full h-48 bg-gray-900/50 border border-white/5 rounded-2xl p-6 text-gray-100 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/20 resize-none leading-relaxed"
                 />
-
-                <div className="absolute bottom-4 right-4">
-                  <button
-                    onClick={handleAIGenerate}
-                    disabled={isGenerating}
-                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl text-xs font-bold text-white transition-all active:scale-95 disabled:opacity-50"
-                  >
-                    <Sparkles
-                      className={`w-3.5 h-3.5 ${
-                        isGenerating ? "animate-spin" : ""
-                      }`}
-                    />
-                    {isGenerating
-                      ? "AI Thinking..."
-                      : "AI Suggest"}
-                  </button>
-                </div>
               </div>
 
               {/* Footer buttons */}
