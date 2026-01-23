@@ -111,14 +111,14 @@ export default function LandingPage() {
 
         <div className="flex gap-4">
           <button
-            onClick={() => router.push("/login")}
+            onClick={() => router.push("/Login")}
             className="text-gray-300 hover:text-white"
           >
             Log In
           </button>
 
           <button
-            onClick={() => router.push("/signup")}
+            onClick={() => router.push("/Signup")}
             className="bg-purple-600 hover:bg-purple-500 text-white px-5 py-2.5 rounded-xl text-xs font-bold"
           >
             Get Started Free
