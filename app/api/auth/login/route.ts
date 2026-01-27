@@ -34,7 +34,7 @@ export async function POST(req: Request) {
     }
 
     // 3️⃣ Verify password
-    const valid = await verifyPassword(password, user.password);
+    const valid = await verifyPassword(password, user.password ?? "");
 
     if (!valid) {
       return NextResponse.json(
