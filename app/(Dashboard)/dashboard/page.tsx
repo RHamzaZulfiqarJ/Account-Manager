@@ -1,6 +1,7 @@
 "use client"
 
 import { motion } from "framer-motion"
+import { redirect } from "next/navigation";
 import StatCard from "@/components/StatCard"
 import {
   AreaChart,
@@ -18,6 +19,9 @@ import {
   AlertCircle,
 } from "lucide-react"
 
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+
 const data = [
   { name: "Mon", followers: 4000, reach: 2400 },
   { name: "Tue", followers: 3000, reach: 1398 },
@@ -29,6 +33,31 @@ const data = [
 ]
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadUser() {
+      const res = await fetch("/api/auth/user");
+
+      if (!res.ok) {
+        router.push("/login");
+        return;
+      }
+
+      const data = await res.json();
+      setUser(data.user);
+      setLoading(false);
+    }
+
+    loadUser();
+  }, [router]);
+
+  if (loading) {
+    return <div className="text-white">Loading...</div>;
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -40,7 +69,7 @@ export default function DashboardPage() {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-4xl font-bold text-white mb-2">
-            Welcome back, Alex!
+            Welcome back, {user.firstName}!
           </h1>
           <p className="text-gray-400">
             Your social campaigns are performing 12% better than last week.

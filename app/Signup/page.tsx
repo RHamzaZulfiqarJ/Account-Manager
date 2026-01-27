@@ -12,19 +12,43 @@ import {
   Check,
   ArrowLeft,
 } from "lucide-react"
+import { FaGoogle } from "react-icons/fa"
 
 export default function SignupPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
 
-    setTimeout(() => {
-      setLoading(false)
-      router.push("/login")
-    }, 1200)
+    const form = e.currentTarget;
+
+    const firstName = form.firstName.value;
+    const lastName = form.lastName.value;
+    const email = form.email.value;
+    const password = form.password.value;
+
+    const res = await fetch("/api/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ firstName, lastName, email, password }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      setError(data.message || "Signup failed");
+      return;
+    }
+
+    setLoading(false);
+    router.push("/dashboard");
+  }
+
+  const handleOAuth = () => {
+    window.location.href = "/api/auth/oauth/google"
   }
 
   return (
@@ -78,6 +102,7 @@ export default function SignupPage() {
                 <User className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 group-focus-within:text-purple-400 transition-colors" />
                 <input
                   type="text"
+                  name="firstName"
                   required
                   placeholder="Alex"
                   className="w-full bg-gray-900 border border-white/5 rounded-2xl py-5 pl-14 pr-5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all text-sm text-white"
@@ -92,6 +117,7 @@ export default function SignupPage() {
               </label>
               <input
                 type="text"
+                name="lastName"
                 required
                 placeholder="Rivera"
                 className="w-full bg-gray-900 border border-white/5 rounded-2xl py-5 px-5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all text-sm text-white"
@@ -108,6 +134,7 @@ export default function SignupPage() {
               <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 group-focus-within:text-purple-400 transition-colors" />
               <input
                 type="email"
+                name="email"
                 required
                 placeholder="alex@sproutpulse.com"
                 className="w-full bg-gray-900 border border-white/5 rounded-2xl py-5 pl-14 pr-5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all text-sm text-white"
@@ -124,6 +151,7 @@ export default function SignupPage() {
               <Lock className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 group-focus-within:text-purple-400 transition-colors" />
               <input
                 type="password"
+                name="password"
                 required
                 placeholder="At least 8 characters"
                 className="w-full bg-gray-900 border border-white/5 rounded-2xl py-5 pl-14 pr-5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all text-sm text-white"
@@ -145,6 +173,10 @@ export default function SignupPage() {
               </>
             )}
           </button>
+
+          <button onClick={handleOAuth} className="w-full glass border-white/5 hover:bg-white/5 py-4 rounded-2xl flex items-center justify-center gap-3 text-lg font-bold transition-all text-white">
+            <FaGoogle className="w-5 h-5" /> Sign in with Google
+          </button>
         </form>
 
         {/* Footer */}
@@ -152,7 +184,7 @@ export default function SignupPage() {
           <p className="text-sm text-gray-500 font-medium">
             Already have an account?{" "}
             <button
-              onClick={() => router.push("/Login")}
+              onClick={() => router.push("/login")}
               className="text-purple-500 font-black hover:text-purple-400 transition-colors cursor-pointer hover:underline"
             >
               Log in

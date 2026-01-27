@@ -1,9 +1,33 @@
 "use client"
 
 import Image from "next/image"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Bell, Search, ChevronDown } from "lucide-react"
 
 export default function Navbar() {
+
+  const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadUser() {
+      const res = await fetch("/api/auth/user");
+
+      if (!res.ok) {
+        router.push("/login");
+        return;
+      }
+
+      const data = await res.json();
+      setUser(data.user);
+      setLoading(false);
+    }
+
+    loadUser();
+  }, [router]);
+
   return (
     <header className="h-20 border-b border-white/5 px-8 flex items-center justify-between glass z-40">
 
@@ -45,7 +69,7 @@ export default function Navbar() {
 
           <div className="text-left hidden lg:block">
             <p className="text-sm font-semibold text-white">
-              Alex Rivera
+              {loading ? "Loading..." : `${user.firstName} ${user.lastName}`}
             </p>
             <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">
               Admin Manager

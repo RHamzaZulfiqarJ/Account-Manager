@@ -23,9 +23,9 @@ export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
 
-  const handleLogout = () => {
-    document.cookie = "auth=; Max-Age=0; path=/"
-    router.push("/")
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.href = "/login";
   }
 
   return (

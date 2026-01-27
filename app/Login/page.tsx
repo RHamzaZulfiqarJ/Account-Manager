@@ -1,29 +1,50 @@
 "use client"
 
-import { useState } from "react"
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion"
-import { useRouter } from "next/navigation"
+import { FaGoogle } from "react-icons/fa";
 import {
   Share2,
   Lock,
   Mail,
   ArrowRight,
-  Github,
   ArrowLeft,
+  Github,
 } from "lucide-react"
 
 export default function LoginPage() {
-  const router = useRouter()
-  const [loading, setLoading] = useState(false)
+  const router = useRouter();
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
 
-    setTimeout(() => {
-      setLoading(false)
-      router.push("/dashboard") // after login
-    }, 1200)
+    const form = e.currentTarget;
+    const email = form.email.value;
+    const password = form.password.value;
+
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      setError(data.message || "Login failed");
+      return;
+    }
+
+    setLoading(false);
+    router.push("/dashboard");
+  }
+
+  const handleOAuth = () => {
+    window.location.href = "/api/auth/oauth/google"
   }
 
   return (
@@ -79,6 +100,7 @@ export default function LoginPage() {
             <div className="relative group">
               <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 group-focus-within:text-purple-400 transition-colors" />
               <input
+                name="email"
                 type="email"
                 required
                 placeholder="alex@sproutpulse.com"
@@ -105,6 +127,7 @@ export default function LoginPage() {
               <Lock className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 group-focus-within:text-purple-400 transition-colors" />
               <input
                 type="password"
+                name="password"
                 required
                 placeholder="••••••••"
                 className="w-full bg-gray-900 border border-white/5 rounded-2xl py-5 pl-14 pr-5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all text-sm text-white"
@@ -138,14 +161,14 @@ export default function LoginPage() {
             <div className="h-px bg-white/5 flex-1" />
           </div>
 
-          <button className="w-full glass border-white/5 hover:bg-white/5 py-4 rounded-2xl flex items-center justify-center gap-3 text-sm font-bold transition-all text-white">
-            <Github className="w-5 h-5" /> GitHub
+          <button onClick={handleOAuth} className="w-full glass border-white/5 hover:bg-white/5 py-4 rounded-2xl flex items-center justify-center gap-3 text-lg font-bold transition-all text-white">
+            <FaGoogle className="w-5 h-5" /> Sign in with Google
           </button>
 
           <p className="text-sm text-gray-500 font-medium">
             Don't have an account?{" "}
             <button
-              onClick={() => router.push("/Signup")}
+              onClick={() => router.push("/signup")}
               className="text-purple-500 font-black hover:text-purple-400 transition-colors hover:underline cursor-pointer"
             >
               Sign up
