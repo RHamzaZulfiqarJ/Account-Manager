@@ -7,6 +7,7 @@ import { signToken } from "@/libs/jwt";
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const code = searchParams.get("code");
+  const baseURL = process.env.NEXT_PUBLIC_APP_URL;
 
   const tokenRes = await fetch(
     "https://oauth2.googleapis.com/token",
@@ -20,7 +21,7 @@ export async function GET(req: Request) {
         client_id: process.env.GOOGLE_CLIENT_ID!,
         client_secret: process.env.GOOGLE_CLIENT_SECRET!,
         redirect_uri:
-          "http://localhost:3000/api/auth/oauth/google/callback",
+          `${baseURL}/api/auth/oauth/google/callback`,
         grant_type: "authorization_code",
       }),
     }
