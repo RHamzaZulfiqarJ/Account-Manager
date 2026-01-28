@@ -1,88 +1,69 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { ArrowUpRight, ArrowDownRight } from "lucide-react"
+import { CheckCircle, X } from "lucide-react"
+import { BsTwitterX } from "react-icons/bs";
 
-interface StatCardProps {
-  label: string
-  value: string
-  change: string
-  trend: "up" | "down"
-  delay?: number
+interface AccountCardProps {
+  platform: string
+  username: string
+  connectedAt?: string
+  loadingDelete?: boolean
+  onDisconnect?: () => void
 }
 
 export default function StatCard({
-  label,
-  value,
-  change,
-  trend,
-  delay = 0,
-}: StatCardProps) {
+  platform,
+  username,
+  connectedAt,
+  loadingDelete,
+  onDisconnect,
+}: AccountCardProps) {
   return (
     <motion.div
       initial={{ y: 20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
-      transition={{ delay }}
-      className="glass p-6 rounded-2xl border border-white/5 hover:border-purple-500/30 transition-all duration-500 group cursor-default"
+      whileHover={{ y: -4 }}
+      className="
+        glass p-6 rounded-2xl
+        border border-white/10
+        transition-all duration-300
+        group
+      "
     >
       {/* Header */}
-      <div className="flex justify-between items-start mb-4">
-        <p className="text-gray-400 text-sm font-medium">
-          {label}
-        </p>
-
-        <div
-          className={`p-1.5 rounded-lg ${
-            trend === "up"
-              ? "bg-emerald-500/10"
-              : "bg-rose-500/10"
-          }`}
-        >
-          {trend === "up" ? (
-            <ArrowUpRight className="w-4 h-4 text-emerald-500" />
-          ) : (
-            <ArrowDownRight className="w-4 h-4 text-rose-500" />
-          )}
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center gap-2">
+          <BsTwitterX className="text-white" />
+          <p className="text-sm uppercase tracking-wide text-gray-400">
+            {platform}
+          </p>
         </div>
+
+        <CheckCircle className="text-emerald-500 w-5 h-5" />
       </div>
 
-      {/* Value */}
-      <div className="flex items-end gap-3">
-        <h3 className="text-3xl font-bold text-white group-hover:text-purple-400 transition-colors">
-          {value}
-        </h3>
+      {/* Username */}
+      <h3 className="text-xl font-semibold text-white mb-5 transition">
+        @{username}
+      </h3>
 
-        <p
-          className={`text-xs mb-1 font-semibold ${
-            trend === "up"
-              ? "text-emerald-500"
-              : "text-rose-500"
-          }`}
-        >
-          {trend === "up" ? "+" : ""}
-          {change}%
+      {/* Actions */}
+      <button
+        onClick={onDisconnect}
+        disabled={loadingDelete}
+        className="text-lg text-white hover:bg-rose-500 transition-all duration-300 bg-red-600 w-full p-2 rounded-2xl cursor-pointer"
+      >
+        {loadingDelete ? "Disconnecting..." : "Disconnect"}
+      </button>
+
+      {/* Connected At */}
+      {connectedAt && (
+        <p className="text-sm text-gray-400 mt-4 -mb-3 text-end">
+          Connected on {new Date(connectedAt).toLocaleDateString()}
         </p>
-      </div>
+      )}
 
-      {/* Mini graph */}
-      <div className="mt-4 h-8 flex items-end gap-1 overflow-hidden">
-        {[40, 70, 45, 90, 65, 85, 55, 100].map((h, i) => (
-          <motion.div
-            key={i}
-            initial={{ height: 0 }}
-            animate={{ height: `${h}%` }}
-            transition={{
-              delay: delay + i * 0.05,
-              duration: 0.8,
-            }}
-            className={`flex-1 rounded-t-sm ${
-              trend === "up"
-                ? "bg-emerald-500/20"
-                : "bg-rose-500/20"
-            }`}
-          />
-        ))}
-      </div>
     </motion.div>
   )
 }

@@ -69,7 +69,7 @@ export async function GET(req: Request) {
 
   response.cookies.set("token", jwt, {
     httpOnly: true,
-    sameSite: "strict",
+    sameSite: "lax",
     path: "/",
   });
 
