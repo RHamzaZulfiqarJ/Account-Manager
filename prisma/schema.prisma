@@ -31,7 +31,28 @@ model SocialAccount {
   userId String
   user   User   @relation(fields: [userId], references: [id])
 
-  createdAt DateTime @default(now())
+  createdAt      DateTime        @default(now())
+  scheduledPosts ScheduledPost[]
 
   @@unique([platform, accountId])
+}
+
+model ScheduledPost {
+  id String @id @default(uuid())
+
+  content String
+
+  platform String // twitter (future: linkedin, facebook)
+
+  scheduledAt DateTime // when it should be posted
+  postedAt    DateTime?
+
+  status String // pending | posted | failed
+
+  errorMessage String?
+
+  socialAccountId String
+  socialAccount   SocialAccount @relation(fields: [socialAccountId], references: [id])
+
+  createdAt DateTime @default(now())
 }
