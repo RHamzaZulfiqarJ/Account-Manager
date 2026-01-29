@@ -160,7 +160,7 @@ export default function LandingPage() {
           </p>
           <div className="flex flex-col md:flex-row items-center justify-center gap-6">
             <button 
-              onClick={() => router.push('Signup')}
+              onClick={() => router.push('signup')}
               className="w-full md:w-auto px-12 py-6 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-2xl shadow-2xl shadow-purple-600/30 transition-all active:scale-95 text-xl"
             >
               Start Your Free Trial
