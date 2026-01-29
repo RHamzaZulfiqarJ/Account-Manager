@@ -31,28 +31,25 @@ model SocialAccount {
   userId String
   user   User   @relation(fields: [userId], references: [id])
 
-  createdAt      DateTime        @default(now())
   scheduledPosts ScheduledPost[]
+
+  createdAt DateTime @default(now())
 
   @@unique([platform, accountId])
 }
 
 model ScheduledPost {
-  id String @id @default(uuid())
-
-  content String
-
-  platform String // twitter (future: linkedin, facebook)
-
-  scheduledAt DateTime // when it should be posted
-  postedAt    DateTime?
-
-  status String // pending | posted | failed
-
-  errorMessage String?
-
-  socialAccountId String
-  socialAccount   SocialAccount @relation(fields: [socialAccountId], references: [id])
-
-  createdAt DateTime @default(now())
+  id                String   @id @default(uuid())
+  content           String
+  scheduledAt       DateTime
+  postedAt          DateTime?
+  status            String   // pending | posted | failed
+  retryCount        Int      @default(0)
+  errorMessage      String?
+  socialAccountId   String
+  socialAccount     SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now())
+  lastAttemptAt     DateTime?
+  @@index([status])
+  @@index([scheduledAt])
 }

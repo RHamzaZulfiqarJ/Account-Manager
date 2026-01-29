@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Calendar as CalendarIcon,
@@ -15,11 +15,29 @@ import {
   Clock,
 } from "lucide-react";
 
-import ComposeModal from "@/components/ComposeModal";
+import ComposeModal from "@/app/(Dashboard)/publishing/ComposeModal";
+import { BsTwitterX } from "react-icons/bs";
 
 export default function PublishingPage() {
   const [view, setView] = useState<"calendar" | "list">("list");
   const [isComposeOpen, setIsComposeOpen] = useState(false);
+  const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
+  const [posts, setPosts] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch("/api/posts")
+      .then(res => res.json())
+      .then(data => setPosts(data.posts));
+  }, []);
+
+  const closeCompose = async () => {
+    setIsComposeOpen(false);
+    setSelectedAccounts([]);
+
+    const res = await fetch("/api/posts");
+    const data = await res.json();
+    setPosts(data.posts);
+  };
 
   return (
     <motion.div
@@ -66,9 +84,9 @@ export default function PublishingPage() {
           {/* Compose */}
           <button
             onClick={() => setIsComposeOpen(true)}
-            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-purple-600/20 active:scale-95 transition-all"
+            className="cursor-pointer flex items-center gap-2 bg-purple-600 hover:bg-purple-500 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-purple-600/20 active:scale-95 transition-all"
           >
-            <Plus className="w-5 h-5" /> Compose
+            <Plus className="w-5 h-5" /> Publish Post
           </button>
         </div>
       </div>
@@ -77,15 +95,7 @@ export default function PublishingPage() {
       <div className="glass rounded-2xl border border-white/5 overflow-hidden">
         <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/5">
           <div className="flex items-center gap-6">
-            <h3 className="font-bold">Upcoming Posts</h3>
-            <div className="flex gap-2">
-              <span className="px-3 py-1 bg-purple-500/10 text-purple-400 text-[10px] font-bold uppercase tracking-wider rounded-full border border-purple-500/20">
-                All Channels
-              </span>
-              <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 text-[10px] font-bold uppercase tracking-wider rounded-full border border-emerald-500/20">
-                Scheduled
-              </span>
-            </div>
+            <h3 className="font-bold">All Scheduled Posts</h3>
           </div>
 
           <button className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors">
@@ -94,94 +104,69 @@ export default function PublishingPage() {
         </div>
 
         <div className="divide-y divide-white/5">
-          {[
-            {
-              platform: Instagram,
-              color: "text-pink-500",
-              title: "Summer Collection Preview",
-              time: "Tomorrow, 09:00 AM",
-              status: "Scheduled",
-              author: "Alex",
-            },
-            {
-              platform: Twitter,
-              color: "text-blue-400",
-              title: "Quick Tip: How to style denim",
-              time: "Tomorrow, 02:30 PM",
-              status: "Draft",
-              author: "Sarah",
-            },
-            {
-              platform: Linkedin,
-              color: "text-blue-600",
-              title: "Weekly Industry Insights #42",
-              time: "Oct 24, 10:00 AM",
-              status: "Needs Approval",
-              author: "Alex",
-            },
-            {
-              platform: Facebook,
-              color: "text-blue-700",
-              title: "Customer spotlight: Emma Doe",
-              time: "Oct 25, 04:00 PM",
-              status: "Scheduled",
-              author: "Marketing Bot",
-            },
-          ].map((post, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
-              className="p-6 flex items-center gap-6 hover:bg-white/[0.02] transition-colors group"
-            >
-              <div
-                className={`p-3 rounded-xl bg-gray-900 border border-white/5 ${post.color}`}
+          {posts?.map((post, i) => {
+            const time =
+              post.status === "posted"
+                ? post.postedAt
+                : post.scheduledAt;
+            return (
+              <motion.div
+                key={post.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.1 }}
+                className="p-6 flex items-center gap-6 hover:bg-white/20 transition-colors group"
               >
-                <post.platform className="w-6 h-6" />
-              </div>
-
-              <div className="flex-1">
-                <h4 className="font-bold text-white group-hover:text-purple-400 transition-colors">
-                  {post.title}
-                </h4>
-                <div className="flex items-center gap-3 mt-1">
-                  <span className="text-xs text-gray-500 flex items-center gap-1">
-                    <Clock className="w-3 h-3" /> {post.time}
-                  </span>
-                  <span className="w-1 h-1 rounded-full bg-gray-800"></span>
-                  <span className="text-xs text-gray-500">
-                    By {post.author}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-6">
-                <span
-                  className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest ${
-                    post.status === "Scheduled"
-                      ? "bg-emerald-500/10 text-emerald-500"
-                      : post.status === "Draft"
-                      ? "bg-gray-500/10 text-gray-400"
-                      : "bg-amber-500/10 text-amber-500"
-                  }`}
+                <div
+                  className={`p-3 rounded-xl bg-gray-900 border border-white/5`}
                 >
-                  {post.status}
-                </span>
+                  <BsTwitterX className="w-6 h-6" />
+                </div>
 
-                <button className="p-2 text-gray-500 hover:text-white transition-colors">
-                  <MoreHorizontal className="w-5 h-5" />
-                </button>
-              </div>
-            </motion.div>
-          ))}
+                <div className="flex-1">
+                  <h4 className="font-bold text-white group-hover:text-purple-400 transition-colors">
+                    {post.socialAccount.accountUsername}
+                  </h4>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-xs text-gray-500 flex items-center gap-1">
+                      <Clock className="w-3 h-3" /> {post.status === "posted" ? "Posted at" : "Scheduled for"} {new Date(time).toLocaleString()}
+                    </span>
+                    <span className="w-1 h-1 rounded-full bg-gray-800"></span>
+                    <p className="text-sm text-gray-400 mt-1">
+                      {post.content}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-6">
+                  <span
+                    className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest ${
+                      post.status === "posted"
+                        ? "bg-emerald-500/10 text-emerald-500" : post.status === "pending"
+                        ? "bg-gray-500/10 text-gray-400" : post.status === "processing"
+                        ? "bg-amber-500/10 text-amber-500" : "bg-red-500/10 text-red-500"
+                    }`}
+                  >
+                    {post.status}
+                  </span>
+
+                  <button className="p-2 text-gray-500 hover:text-white transition-colors">
+                    <MoreHorizontal className="w-5 h-5" />
+                  </button>
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
       </div>
 
       <ComposeModal
+        selectedAccounts={selectedAccounts}
+        setSelectedAccounts={setSelectedAccounts}
         isOpen={isComposeOpen}
-        onClose={() => setIsComposeOpen(false)}
+        onClose={closeCompose}
       />
+
     </motion.div>
   );
 }

@@ -125,10 +125,10 @@ export default function DashboardPage() {
           </div>
 
           {accounts.length === 0 && (
-                <p className="text-gray-400">
-                  No accounts connected yet.
-                </p>
-              )}
+            <p className="text-gray-400">
+              No accounts connected yet.
+            </p>
+          )}
           {/* Stats */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-10">
             {accounts.map((acc) => (

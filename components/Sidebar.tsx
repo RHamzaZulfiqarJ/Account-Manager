@@ -57,7 +57,7 @@ export default function Sidebar() {
               <button
                 key={item.href}
                 onClick={() => router.push(item.href)}
-                className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300 group ${
+                className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300 cursor-pointer group ${
                   isActive
                     ? "bg-purple-600/10 text-purple-400 border border-purple-500/20"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -85,35 +85,13 @@ export default function Sidebar() {
             )
           })}
         </nav>
-
-        {/* Teams */}
-        <div className="mt-12 space-y-2">
-          <h4 className="px-4 text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-4">
-            Teams
-          </h4>
-
-          <button className="w-full flex items-center gap-4 px-4 py-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all">
-            <Layers className="w-4 h-4" />
-            <span className="text-sm">Marketing Team</span>
-          </button>
-
-          <button className="w-full flex items-center gap-4 px-4 py-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all">
-            <Settings className="w-4 h-4" />
-            <span className="text-sm">Workflow Settings</span>
-          </button>
-        </div>
       </div>
 
       {/* Bottom actions */}
       <div className="mt-auto p-6 space-y-3">
-        <button className="w-full bg-purple-600 hover:bg-purple-500 text-white font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-purple-600/20 active:scale-95 transition-all">
-          <PlusCircle className="w-5 h-5" />
-          <span>New Post</span>
-        </button>
-
         <button
           onClick={handleLogout}
-          className="w-full text-gray-500 hover:text-rose-400 hover:bg-rose-500/5 py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all"
+          className="w-full text-white hover:bg-red-600 bg-red-500 cursor-pointer py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all duration-300"
         >
           <LogOut className="w-4 h-4" />
           <span className="text-sm font-medium">Logout</span>
