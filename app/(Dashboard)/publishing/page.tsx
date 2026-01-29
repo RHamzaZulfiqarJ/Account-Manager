@@ -9,6 +9,7 @@ import {
   Filter,
   MoreHorizontal,
   Clock,
+  Send,
 } from "lucide-react";
 
 import ComposeModal from "@/app/(Dashboard)/publishing/ComposeModal";
@@ -107,8 +108,8 @@ export default function PublishingPage() {
                 ? post.postedAt
                 : post.scheduledAt;
 
-            /* const platform = PLATFORMS[post.platform];
-            const Icon = platform.icon; */
+            const platform = PLATFORMS[post.socialAccount.platform as keyof typeof PLATFORMS];
+            const Icon = platform?.icon ?? Send;
 
             return (
               <motion.div
@@ -121,7 +122,7 @@ export default function PublishingPage() {
                 <div
                   className={`p-3 rounded-xl bg-gray-900 border border-white/5`}
                 >
-                  <BsTwitterX className="w-6 h-6" />
+                  <Icon className="w-6 h-6" />
                 </div>
 
                 <div className="flex-1">

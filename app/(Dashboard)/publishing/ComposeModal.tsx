@@ -26,6 +26,8 @@ export default function ComposeModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<Array<{ id: string; platform: keyof typeof PLATFORMS; accountUsername: string }>>([]);
+  const [scheduleAt, setScheduleAt] = useState<string>("");
+  const [showScheduler, setShowScheduler] = useState(false);
 
   useEffect(() => {
     async function loadAccounts() {
@@ -93,20 +95,45 @@ export default function ComposeModal({
     }
   }
 
-  async function handleSchedule(date: Date) {
-    if (!content || selectedAccounts.length === 0) return;
+  async function handleSchedule() {
+    if (!content.trim()) {
+      setError("Post content is required");
+      return;
+    }
 
-    await fetch("/api/posts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        content,
-        accountIds: selectedAccounts,
-        scheduledAt: date.toISOString(),
-      }),
-    });
+    if (selectedAccounts.length === 0) {
+      setError("Select at least one account");
+      return;
+    }
 
-    onClose();
+    if (!scheduleAt) {
+      setError("Select date & time");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      await fetch("/api/posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content,
+          accountIds: selectedAccounts,
+          scheduledAt: new Date(scheduleAt).toISOString(),
+        }),
+      });
+
+      setContent("");
+      setSelectedAccounts([]);
+      setScheduleAt("");
+      setShowScheduler(false);
+      onClose();
+    } catch (err: any) {
+      setError("Failed to schedule post");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -160,7 +187,7 @@ export default function ComposeModal({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {accounts.map((acc) => {
                   const platform = PLATFORMS[acc.platform as keyof typeof PLATFORMS];
-                  const Icon = platform?.icon;
+                  const Icon = platform?.icon ?? Send;
 
                   return (
                     <button
@@ -207,22 +234,59 @@ export default function ComposeModal({
                 />
               </div>
 
-              {/* Footer buttons */}
-              <div className="flex gap-4 pt-4">
-                <button 
-                  disabled={loading}
-                  onClick={() => handleSchedule(new Date())}
-                  className="flex-1 flex items-center justify-center gap-3 bg-white/5 hover:bg-white/10 text-white font-bold py-4 rounded-2xl border border-white/5 transition-all">
-                  <Calendar className="w-5 h-5" /> {loading ? "Scheduling..." : "Schedule Post"}
-                </button>
+              {showScheduler && (
+                <div className="space-y-2">
+                  <label className="text-sm text-gray-400">
+                    Schedule date & time
+                  </label>
 
-                <button 
-                  disabled={loading}
-                  onClick={handlePostNow} 
-                  className="flex-1 bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 rounded-2xl shadow-xl shadow-purple-600/20 active:scale-95 transition-all">
+                  <input
+                    type="datetime-local"
+                    value={scheduleAt}
+                    onChange={(e) => setScheduleAt(e.target.value)}
+                    className="w-full bg-gray-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/30"
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-4 pt-4">
+
+                {/* Schedule button */}
+                {!showScheduler && (
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => setShowScheduler(true)}
+                    className="flex-1 flex items-center justify-center gap-3 bg-white/5 hover:bg-white/10 text-white font-bold py-4 rounded-2xl border border-white/5 transition-all"
+                  >
+                    <Calendar className="w-5 h-5" />
+                    Schedule Post
+                  </button>
+                )}
+
+                {/* Confirm schedule */}
+                {showScheduler ? (
+                  <button
+                    type="button"
+                    disabled={!scheduleAt || loading}
+                    onClick={handleSchedule}
+                    className="flex-1 bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 rounded-2xl shadow-xl shadow-purple-600/20 disabled:opacity-50"
+                  >
+                    Confirm Schedule
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={handlePostNow}
+                    className="flex-1 bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 rounded-2xl shadow-xl shadow-purple-600/20"
+                  >
                     {loading ? "Posting..." : "Post Now"}
-                </button>
+                  </button>
+                )}
               </div>
+
+
             </div>
           </motion.div>
         </>
