@@ -23,6 +23,8 @@ export default function AddAccountModal({
   const connectionHandler = () => {
     if (platform == "twitter") {
       window.location.href = "/api/auth/oauth/twitter"
+    } else if (platform == "mastodon") {
+      window.location.href = "/api/auth/oauth/mastodon"
     } else {
       alert("Option Available Soon");
     }
@@ -69,12 +71,12 @@ export default function AddAccountModal({
             <div className="p-8 space-y-6">
               {/* Platforms */}
               <div className="flex gap-4">
-                {["instagram", "twitter", "linkedin", "facebook"].map(
+                {["twitter", "mastodon"].map(
                   (p) => (
                     <button
                       key={p}
                       onClick={() => setPlatform(p)}
-                      className={`px-4 py-2 rounded-xl text-sm font-semibold capitalize transition-all border ${
+                      className={`w-full px-4 py-2 rounded-xl text-sm font-semibold capitalize transition-all border ${
                         platform === p
                           ? "bg-purple-600 border-purple-400 text-white shadow-lg shadow-purple-600/20"
                           : "bg-white/5 border-white/5 text-gray-400 hover:text-white hover:bg-white/10"

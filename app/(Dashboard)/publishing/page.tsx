@@ -8,14 +8,11 @@ import {
   Plus,
   Filter,
   MoreHorizontal,
-  Instagram,
-  Twitter,
-  Linkedin,
-  Facebook,
   Clock,
 } from "lucide-react";
 
 import ComposeModal from "@/app/(Dashboard)/publishing/ComposeModal";
+import { PLATFORMS } from "@/libs/platform";
 import { BsTwitterX } from "react-icons/bs";
 
 export default function PublishingPage() {
@@ -109,6 +106,10 @@ export default function PublishingPage() {
               post.status === "posted"
                 ? post.postedAt
                 : post.scheduledAt;
+
+            /* const platform = PLATFORMS[post.platform];
+            const Icon = platform.icon; */
+
             return (
               <motion.div
                 key={post.id}

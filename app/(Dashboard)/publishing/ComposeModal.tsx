@@ -7,6 +7,7 @@ import {
   Send,
   Calendar,
 } from "lucide-react"
+import { PLATFORMS } from "@/libs/platform";
 
 interface ComposeModalProps {
   selectedAccounts: string[];
@@ -24,7 +25,7 @@ export default function ComposeModal({
   const [content, setContent] = useState("")
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [accounts, setAccounts] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<Array<{ id: string; platform: keyof typeof PLATFORMS; accountUsername: string }>>([]);
 
   useEffect(() => {
     async function loadAccounts() {
@@ -157,19 +158,34 @@ export default function ComposeModal({
             )}
             {accounts.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {accounts.map((acc) => (
-                  <button
-                    key={acc.id}
-                    onClick={() => toggleAccount(acc.id)}
-                    className={`p-4 border rounded-2xl text-left transition-all capitalize w-full cursor-pointer ${
-                      selectedAccounts.includes(acc.id)
-                        ? "bg-purple-600 border-purple-400 text-white shadow-lg shadow-purple-600/20"
-                        : "bg-white/5 border-white/5 text-gray-400 hover:text-white hover:bg-white/10"
-                    }`}
-                  >
-                    {acc.platform} - {acc.accountUsername}
-                  </button>
-                ))}
+                {accounts.map((acc) => {
+                  const platform = PLATFORMS[acc.platform as keyof typeof PLATFORMS];
+                  const Icon = platform?.icon;
+
+                  return (
+                    <button
+                      key={acc.id}
+                      onClick={() => toggleAccount(acc.id)}
+                      className={`p-4 border rounded-2xl text-left transition-all capitalize w-full cursor-pointer ${
+                        selectedAccounts.includes(acc.id)
+                          ? "bg-purple-600 border-purple-400 text-white shadow-lg shadow-purple-600/20"
+                          : "bg-white/5 border-white/5 text-gray-400 hover:text-white hover:bg-white/10"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icon className={`w-5 h-5 ${platform.color}`} />
+                        <div>
+                          <p className="font-semibold capitalize">
+                            {platform.name}
+                          </p>
+                          <p className="text-xs opacity-70">
+                            @{acc.accountUsername}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
             )}
 

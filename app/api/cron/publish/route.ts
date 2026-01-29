@@ -1,7 +1,6 @@
 export const runtime = "nodejs";
 
 import { prisma } from "@/libs/prisma";
-import { isTokenExpired, refreshTwitterToken } from "@/libs/twitter";
 import { NextResponse } from "next/server";
 
 export async function GET(req: Request) {
@@ -11,10 +10,13 @@ export async function GET(req: Request) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
+  // 1️⃣ Find due posts
   const posts = await prisma.scheduledPost.findMany({
     where: {
       status: "pending",
-      scheduledAt: { lte: new Date() },
+      scheduledAt: {
+        lte: new Date(),
+      },
     },
     include: {
       socialAccount: true,
@@ -23,6 +25,7 @@ export async function GET(req: Request) {
 
   for (const post of posts) {
 
+    // 2️⃣ Lock job (prevents double posting)
     const locked = await prisma.scheduledPost.updateMany({
       where: {
         id: post.id,
@@ -30,51 +33,38 @@ export async function GET(req: Request) {
       },
       data: {
         status: "processing",
-        lastAttemptAt: new Date(),
       },
     });
 
     if (locked.count === 0) continue;
 
     try {
+      const account = post.socialAccount;
 
-      let accessToken = post.socialAccount.accessToken;
-
-      if (!post.socialAccount.refreshToken) {
-        throw new Error("Missing refresh token");
+      if (account.platform !== "mastodon") {
+        throw new Error("Unsupported platform");
       }
 
-      if (isTokenExpired(post.socialAccount.expiresAt)) {
-        const refreshed = await refreshTwitterToken(
-          post.socialAccount.refreshToken!
-        );
+      const url = `${account.instanceUrl}/api/v1/statuses`;
 
-        accessToken = refreshed.access_token;
-
-        await prisma.socialAccount.update({
-          where: { id: post.socialAccount.id },
-          data: {
-            accessToken: refreshed.access_token,
-            refreshToken: refreshed.refresh_token,
-            expiresAt: new Date(Date.now() + refreshed.expires_in * 1000),
-          },
-        });
-      }
-
-      const res = await fetch("https://api.twitter.com/2/tweets", {
+      // 3️⃣ Post to Mastodon
+      const res = await fetch(url, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${account.accessToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ text: post.content }),
+        body: JSON.stringify({
+          status: post.content,
+        }),
       });
 
       if (!res.ok) {
-        const err = await res.text();
-        throw new Error(err);
+        const text = await res.text();
+        throw new Error(text);
       }
 
+      // 4️⃣ Mark as posted
       await prisma.scheduledPost.update({
         where: { id: post.id },
         data: {
@@ -82,24 +72,17 @@ export async function GET(req: Request) {
           postedAt: new Date(),
         },
       });
+
     } catch (err: any) {
-      if (post.retryCount < 3) {
-        await prisma.scheduledPost.update({
-          where: { id: post.id },
-          data: {
-            status: "pending",
-            retryCount: { increment: 1 },
-          },
-        });
-      } else {
-        await prisma.scheduledPost.update({
-          where: { id: post.id },
-          data: {
-            status: "failed",
-            errorMessage: err.message,
-          },
-        });
-      }
+
+      // 5️⃣ Mark as failed
+      await prisma.scheduledPost.update({
+        where: { id: post.id },
+        data: {
+          status: "failed",
+          errorMessage: err.message,
+        },
+      });
     }
   }
 

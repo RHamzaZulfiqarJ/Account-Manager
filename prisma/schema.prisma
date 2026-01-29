@@ -24,16 +24,20 @@ model SocialAccount {
   accountId       String
   accountUsername String
 
-  accessToken  String
-  refreshToken String?
-  expiresAt    DateTime?
+  accessToken     String
 
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
+  refreshToken    String?
+  tokenExpiry     DateTime?
+  expiresAt       DateTime?
 
-  scheduledPosts ScheduledPost[]
+  instanceUrl     String?
 
-  createdAt DateTime @default(now())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+
+  scheduledPosts  ScheduledPost[]
+
+  createdAt       DateTime @default(now())
 
   @@unique([platform, accountId])
 }

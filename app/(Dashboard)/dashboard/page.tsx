@@ -10,6 +10,9 @@ import { useRouter } from "next/navigation";
 import AddAccountModal from "./AddAccount";
 import Confirmation from "./Confirmation";
 
+import { BsTwitterX } from "react-icons/bs";
+import { SiMastodon } from "react-icons/si";
+
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
@@ -76,6 +79,18 @@ export default function DashboardPage() {
     } finally {
       setLoadingDelete(false);
     }
+  }
+
+  function PlatformIcon({ platform }: { platform: string }) {
+    if (platform === "twitter") {
+      return <BsTwitterX className="text-blue-400" />;
+    }
+
+    if (platform === "mastodon") {
+      return <SiMastodon className="text-purple-400" />;
+    }
+
+    return null;
   }
 
   return (
