@@ -34,7 +34,7 @@ export default function AppLogo({ size = "md", className = "" }: AppLogoProps) {
             className={`flex ${selectedSize.box} items-center justify-center overflow-hidden rounded-full border border-[var(--chronos-line-strong)] bg-[var(--chronos-olive)]/10 shadow-[0_18px_70px_var(--chronos-glow)] ${className}`}
         >
             <Image
-                src="/android-chrome-192x192.png"
+                src="/logo.png"
                 alt="MIMICO Logo"
                 width={selectedSize.width}
                 height={selectedSize.height}
