@@ -1,25 +1,32 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ElementType } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
     AlertTriangle,
+    BarChart3,
     Bell,
     CalendarClock,
+    Check,
     CheckCircle2,
     ChevronDown,
-    Command,
+    Clock,
     LayoutDashboard,
     Loader2,
     LogOut,
+    Menu,
     MessageCircle,
+    MoreHorizontal,
     RefreshCw,
-    Search,
     Send,
+    Trash2,
     UserCircle,
+    X,
 } from "lucide-react";
+import { BsTwitterX } from "react-icons/bs";
+import { SiMastodon, SiThreads } from "react-icons/si";
+import AppLogo from "@/components/AppLogo";
 import ThemeToggle from "@/components/ThemeToggle";
-import { whatsappClient, type WhatsAppScheduledMessage, type WhatsAppTemplate } from "@/libs/whatsapp/client";
 
 type User = {
     firstName: string;
@@ -27,44 +34,90 @@ type User = {
     email?: string;
 };
 
-type SocialPost = {
+type NavItem = {
+    label: string;
+    href: string;
+    icon: ElementType;
+};
+
+type NotificationItem = {
+    id: string;
+    title: string;
+    text: string;
+    time: string;
+    type: "failed" | "pending" | "processing" | "posted";
+    read: boolean;
+};
+
+type PostRecord = {
     id: string;
     content: string;
-    scheduledAt: string | null;
-    postedAt: string | null;
     status: string;
+    scheduledAt?: string | null;
+    postedAt?: string | null;
     createdAt: string;
     errorMessage?: string | null;
     socialAccount?: {
-        platform: string;
-        accountUsername: string;
+        accountUsername?: string;
+        platform?: string;
     };
 };
 
-type NavNotification = {
-    id: string;
-    title: string;
-    message: string;
-    time: string;
-    timestamp: number;
-    level: "danger" | "warning" | "info" | "success";
-    href: string;
-    source: "publishing" | "whatsapp" | "system";
-};
+const primaryNav: NavItem[] = [
+    {
+        label: "Dashboard",
+        href: "/dashboard",
+        icon: LayoutDashboard,
+    },
+    {
+        label: "Publishing",
+        href: "/publishing",
+        icon: CalendarClock,
+    },
+    {
+        label: "WhatsApp",
+        href: "/whatsapp",
+        icon: MessageCircle,
+    },
+    {
+        label: "Analytics",
+        href: "/analytics",
+        icon: BarChart3,
+    },
+];
+
+const moreNav: NavItem[] = [
+    {
+        label: "Twitter / X",
+        href: "/twitter",
+        icon: BsTwitterX,
+    },
+    {
+        label: "Mastodon",
+        href: "/mastodon",
+        icon: SiMastodon,
+    },
+    {
+        label: "Threads",
+        href: "/threads",
+        icon: SiThreads,
+    },
+];
 
 const pageTitles: Record<string, string> = {
     "/dashboard": "Dashboard",
     "/publishing": "Publishing",
+    "/whatsapp": "WhatsApp",
+    "/analytics": "Analytics",
     "/twitter": "Twitter / X",
     "/mastodon": "Mastodon",
     "/threads": "Threads",
-    "/whatsapp": "WhatsApp",
-    "/analytics": "Analytics",
 };
 
-const readStorageKey = "mimico-read-notifications";
+const READ_NOTIFICATIONS_KEY = "mimico:read-notifications";
+const DELETED_NOTIFICATIONS_KEY = "mimico:deleted-notifications";
 
-const formatDateTime = (value?: string | null) => {
+const formatTime = (value?: string | null) => {
     if (!value) {
         return "N/A";
     }
@@ -72,50 +125,62 @@ const formatDateTime = (value?: string | null) => {
     return new Date(value).toLocaleString();
 };
 
-const getPostTime = (post: SocialPost) => {
-    return post.postedAt || post.scheduledAt || post.createdAt;
-};
-
 const normalizePlatform = (platform?: string) => {
-    const value = platform?.toLowerCase();
+    if (!platform) {
+        return "Social";
+    }
 
-    if (value === "twitter") {
+    if (platform.toLowerCase() === "twitter") {
         return "Twitter / X";
     }
 
-    if (value === "mastodon") {
+    if (platform.toLowerCase() === "mastodon") {
         return "Mastodon";
     }
 
-    if (value === "threads") {
+    if (platform.toLowerCase() === "threads") {
         return "Threads";
     }
 
-    return platform || "Social";
+    return platform;
 };
 
-const getReadIds = () => {
+const readStorageArray = (key: string) => {
     try {
-        return JSON.parse(localStorage.getItem(readStorageKey) || "[]") as string[];
+        const value = localStorage.getItem(key);
+
+        if (!value) {
+            return [];
+        }
+
+        const parsed = JSON.parse(value);
+
+        return Array.isArray(parsed) ? parsed.filter((item) => typeof item === "string") : [];
     } catch {
         return [];
     }
 };
 
+const writeStorageArray = (key: string, value: string[]) => {
+    localStorage.setItem(key, JSON.stringify(Array.from(new Set(value))));
+};
+
 export default function Navbar() {
     const router = useRouter();
     const pathname = usePathname();
+
     const profileRef = useRef<HTMLDivElement | null>(null);
+    const moreRef = useRef<HTMLDivElement | null>(null);
     const notificationRef = useRef<HTMLDivElement | null>(null);
 
     const [user, setUser] = useState<User | null>(null);
     const [loadingUser, setLoadingUser] = useState(true);
     const [profileOpen, setProfileOpen] = useState(false);
-    const [notificationsOpen, setNotificationsOpen] = useState(false);
-    const [notifications, setNotifications] = useState<NavNotification[]>([]);
-    const [notificationsLoading, setNotificationsLoading] = useState(false);
-    const [notificationError, setNotificationError] = useState("");
-    const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
+    const [moreOpen, setMoreOpen] = useState(false);
+    const [mobileOpen, setMobileOpen] = useState(false);
+    const [notificationOpen, setNotificationOpen] = useState(false);
+    const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+    const [notificationLoading, setNotificationLoading] = useState(false);
 
     const pageTitle = useMemo(() => {
         const matchedRoute = Object.keys(pageTitles)
@@ -127,554 +192,624 @@ export default function Navbar() {
 
     const initials = useMemo(() => {
         if (!user) {
-            return "AM";
+            return "MO";
         }
 
-        return `${user.firstName?.[0] || ""}${user.lastName?.[0] || ""}`.toUpperCase() || "AM";
+        return `${user.firstName?.[0] || ""}${user.lastName?.[0] || ""}`.toUpperCase() || "MO";
     }, [user]);
 
     const unreadCount = useMemo(() => {
-        return notifications.filter((item) => !readNotificationIds.includes(item.id)).length;
-    }, [notifications, readNotificationIds]);
+        return notifications.filter((item) => !item.read).length;
+    }, [notifications]);
 
-    const buildSocialNotifications = (posts: SocialPost[]) => {
-        const now = Date.now();
-        const nextDay = now + 24 * 60 * 60 * 1000;
+    const allMobileNav = useMemo(() => [...primaryNav, ...moreNav], []);
 
-        const failed = posts
-            .filter((post) => post.status === "failed")
-            .slice(0, 5)
-            .map((post) => ({
-                id: `post-failed-${post.id}`,
-                title: "Post failed",
-                message: `${normalizePlatform(post.socialAccount?.platform)} post failed${post.errorMessage ? `: ${post.errorMessage}` : "."}`,
-                time: formatDateTime(getPostTime(post)),
-                timestamp: new Date(getPostTime(post)).getTime(),
-                level: "danger" as const,
-                href: "/publishing",
-                source: "publishing" as const,
-            }));
-
-        const processing = posts
-            .filter((post) => post.status === "processing")
-            .slice(0, 3)
-            .map((post) => ({
-                id: `post-processing-${post.id}`,
-                title: "Post processing",
-                message: `${normalizePlatform(post.socialAccount?.platform)} post is currently being processed.`,
-                time: formatDateTime(getPostTime(post)),
-                timestamp: new Date(getPostTime(post)).getTime(),
-                level: "info" as const,
-                href: "/publishing",
-                source: "publishing" as const,
-            }));
-
-        const upcoming = posts
-            .filter((post) => {
-                if (post.status !== "pending" || !post.scheduledAt) {
-                    return false;
-                }
-
-                const scheduledTime = new Date(post.scheduledAt).getTime();
-
-                return scheduledTime >= now && scheduledTime <= nextDay;
-            })
-            .slice(0, 5)
-            .map((post) => ({
-                id: `post-upcoming-${post.id}`,
-                title: "Post scheduled soon",
-                message: `${normalizePlatform(post.socialAccount?.platform)} post is scheduled within 24 hours.`,
-                time: formatDateTime(post.scheduledAt),
-                timestamp: new Date(post.scheduledAt || post.createdAt).getTime(),
-                level: "warning" as const,
-                href: "/publishing",
-                source: "publishing" as const,
-            }));
-
-        return [...failed, ...processing, ...upcoming];
+    const isActiveRoute = (href: string) => {
+        return pathname === href || pathname.startsWith(`${href}/`);
     };
 
-    const buildWhatsAppNotifications = (
-        failedMessages: WhatsAppScheduledMessage[],
-        queuedMessages: WhatsAppScheduledMessage[],
-        templates: WhatsAppTemplate[],
-    ) => {
-        const now = Date.now();
-        const nextDay = now + 24 * 60 * 60 * 1000;
+    const loadUser = async () => {
+        try {
+            setLoadingUser(true);
 
-        const failed = failedMessages.slice(0, 5).map((message) => ({
-            id: `wa-failed-${message.id}`,
-            title: "WhatsApp message failed",
-            message:
-                message.errorMessage || `${message.templateName || "Template"} failed for ${message.recipientPhone}.`,
-            time: formatDateTime(message.updatedAt || message.scheduledAt),
-            timestamp: new Date(message.updatedAt || message.scheduledAt || message.createdAt).getTime(),
-            level: "danger" as const,
-            href: "/whatsapp",
-            source: "whatsapp" as const,
-        }));
+            const res = await fetch("/api/auth/user");
 
-        const queued = queuedMessages
-            .filter((message) => {
-                const scheduledTime = new Date(message.scheduledAt).getTime();
+            if (!res.ok) {
+                setUser(null);
+                return;
+            }
 
-                return scheduledTime >= now && scheduledTime <= nextDay;
-            })
-            .slice(0, 5)
-            .map((message) => ({
-                id: `wa-queued-${message.id}`,
-                title: "WhatsApp scheduled soon",
-                message: `${message.templateName || "Template"} will be sent to ${message.recipientPhone}.`,
-                time: formatDateTime(message.scheduledAt),
-                timestamp: new Date(message.scheduledAt).getTime(),
-                level: "warning" as const,
-                href: "/whatsapp",
-                source: "whatsapp" as const,
-            }));
-
-        const pendingTemplates = templates
-            .filter((template) => {
-                const status = template.status?.toUpperCase();
-
-                return status === "PENDING" || status === "IN_REVIEW";
-            })
-            .slice(0, 5)
-            .map((template) => ({
-                id: `wa-template-${template.id}`,
-                title: "Template waiting approval",
-                message: `${template.name} is still waiting for Meta approval.`,
-                time: formatDateTime(template.updatedAt || template.createdAt),
-                timestamp: new Date(template.updatedAt || template.createdAt || Date.now()).getTime(),
-                level: "info" as const,
-                href: "/whatsapp",
-                source: "whatsapp" as const,
-            }));
-
-        return [...failed, ...queued, ...pendingTemplates];
+            const data = await res.json();
+            setUser(data.user || null);
+        } catch {
+            setUser(null);
+        } finally {
+            setLoadingUser(false);
+        }
     };
 
     const loadNotifications = async () => {
         try {
-            setNotificationsLoading(true);
-            setNotificationError("");
+            setNotificationLoading(true);
 
-            const items: NavNotification[] = [];
+            const readIds = readStorageArray(READ_NOTIFICATIONS_KEY);
+            const deletedIds = readStorageArray(DELETED_NOTIFICATIONS_KEY);
 
-            const postsRes = await fetch("/api/posts");
+            const res = await fetch("/api/posts");
 
-            if (postsRes.ok) {
-                const data = await postsRes.json();
-                items.push(...buildSocialNotifications(data.posts || []));
+            if (!res.ok) {
+                setNotifications([]);
+                return;
             }
 
-            try {
-                const accountData = await whatsappClient.listAccounts();
+            const data = await res.json();
+            const posts: PostRecord[] = data.posts || [];
 
-                const whatsappData = await Promise.all(
-                    accountData.accounts.map(async (account) => {
-                        const [failed, queued, templates] = await Promise.all([
-                            whatsappClient.listScheduledMessages(account.id, { limit: 5, status: "FAILED" }),
-                            whatsappClient.listScheduledMessages(account.id, { limit: 5, status: "QUEUED" }),
-                            whatsappClient.listTemplates(account.id, { limit: 20 }),
-                        ]);
+            const items = posts
+                .filter((post) => {
+                    const status = post.status.toLowerCase();
+                    return status === "failed" || status === "processing" || status === "pending";
+                })
+                .filter((post) => !deletedIds.includes(post.id))
+                .sort((a, b) => {
+                    const aTime = new Date(a.postedAt || a.scheduledAt || a.createdAt).getTime();
+                    const bTime = new Date(b.postedAt || b.scheduledAt || b.createdAt).getTime();
 
-                        return {
-                            failed: failed.items,
-                            queued: queued.items,
-                            templates: templates.items,
-                        };
-                    }),
-                );
+                    return bTime - aTime;
+                })
+                .slice(0, 8)
+                .map((post) => {
+                    const status = post.status.toLowerCase() as NotificationItem["type"];
+                    const platform = normalizePlatform(post.socialAccount?.platform);
+                    const username = post.socialAccount?.accountUsername
+                        ? `@${post.socialAccount.accountUsername}`
+                        : "Account";
 
-                whatsappData.forEach((data) => {
-                    items.push(...buildWhatsAppNotifications(data.failed, data.queued, data.templates));
+                    return {
+                        id: post.id,
+                        type: status,
+                        read: readIds.includes(post.id),
+                        title:
+                            status === "failed"
+                                ? `${platform} post failed`
+                                : status === "processing"
+                                  ? `${platform} post processing`
+                                  : `${platform} post queued`,
+                        text: post.errorMessage || `${username} · ${post.content}`,
+                        time: formatTime(post.postedAt || post.scheduledAt || post.createdAt),
+                    };
                 });
-            } catch {
-                items.push({
-                    id: "whatsapp-sync-warning",
-                    title: "WhatsApp notifications unavailable",
-                    message: "WhatsApp data could not be loaded right now.",
-                    time: "Now",
-                    timestamp: Date.now(),
-                    level: "warning",
-                    href: "/whatsapp",
-                    source: "system",
-                });
-            }
 
-            const sortedItems = items.sort((a, b) => b.timestamp - a.timestamp).slice(0, 20);
-
-            setNotifications(sortedItems);
+            setNotifications(items);
         } catch {
-            setNotificationError("Could not load notifications");
+            setNotifications([]);
         } finally {
-            setNotificationsLoading(false);
+            setNotificationLoading(false);
         }
     };
 
-    const markAllAsRead = () => {
-        const ids = notifications.map((item) => item.id);
+    const markNotificationAsRead = (id: string) => {
+        const readIds = readStorageArray(READ_NOTIFICATIONS_KEY);
+        writeStorageArray(READ_NOTIFICATIONS_KEY, [...readIds, id]);
 
-        localStorage.setItem(readStorageKey, JSON.stringify(ids));
-        setReadNotificationIds(ids);
+        setNotifications((current) =>
+            current.map((item) => {
+                if (item.id !== id) {
+                    return item;
+                }
+
+                return {
+                    ...item,
+                    read: true,
+                };
+            }),
+        );
     };
 
-    const openNotification = (item: NavNotification) => {
-        const ids = Array.from(new Set([...readNotificationIds, item.id]));
+    const deleteNotification = (id: string) => {
+        const deletedIds = readStorageArray(DELETED_NOTIFICATIONS_KEY);
+        writeStorageArray(DELETED_NOTIFICATIONS_KEY, [...deletedIds, id]);
 
-        localStorage.setItem(readStorageKey, JSON.stringify(ids));
-        setReadNotificationIds(ids);
-        setNotificationsOpen(false);
-        router.push(item.href);
+        setNotifications((current) => current.filter((item) => item.id !== id));
     };
 
-    const handleLogout = async () => {
+    const markAllNotificationsAsRead = () => {
+        const readIds = readStorageArray(READ_NOTIFICATIONS_KEY);
+        const nextReadIds = [...readIds, ...notifications.map((item) => item.id)];
+
+        writeStorageArray(READ_NOTIFICATIONS_KEY, nextReadIds);
+
+        setNotifications((current) =>
+            current.map((item) => ({
+                ...item,
+                read: true,
+            })),
+        );
+    };
+
+    const clearAllNotifications = () => {
+        const deletedIds = readStorageArray(DELETED_NOTIFICATIONS_KEY);
+        const nextDeletedIds = [...deletedIds, ...notifications.map((item) => item.id)];
+
+        writeStorageArray(DELETED_NOTIFICATIONS_KEY, nextDeletedIds);
+        setNotifications([]);
+    };
+
+    const openNotification = (id: string) => {
+        markNotificationAsRead(id);
+        setNotificationOpen(false);
+        router.push("/publishing");
+    };
+
+    const toggleNotifications = () => {
+        setNotificationOpen((current) => {
+            const next = !current;
+
+            if (next) {
+                setProfileOpen(false);
+                setMoreOpen(false);
+                loadNotifications();
+            }
+
+            return next;
+        });
+    };
+
+    const logout = async () => {
         await fetch("/api/auth/logout", {
             method: "POST",
         });
 
-        window.location.href = "/login";
+        router.push("/login");
     };
 
     useEffect(() => {
-        let active = true;
-
-        async function loadUser() {
-            try {
-                const res = await fetch("/api/auth/user");
-
-                if (!res.ok) {
-                    router.push("/login");
-                    return;
-                }
-
-                const data = await res.json();
-
-                if (active) {
-                    setUser(data.user);
-                }
-            } finally {
-                if (active) {
-                    setLoadingUser(false);
-                }
-            }
-        }
-
         loadUser();
-
-        return () => {
-            active = false;
-        };
-    }, [router]);
-
-    useEffect(() => {
-        setReadNotificationIds(getReadIds());
         loadNotifications();
-
-        const interval = window.setInterval(() => {
-            loadNotifications();
-        }, 60000);
-
-        return () => {
-            window.clearInterval(interval);
-        };
     }, []);
 
     useEffect(() => {
-        const closeMenus = (event: MouseEvent) => {
-            const target = event.target as Node;
-
-            if (profileRef.current && !profileRef.current.contains(target)) {
+        const handler = (event: MouseEvent) => {
+            if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
                 setProfileOpen(false);
             }
 
-            if (notificationRef.current && !notificationRef.current.contains(target)) {
-                setNotificationsOpen(false);
+            if (moreRef.current && !moreRef.current.contains(event.target as Node)) {
+                setMoreOpen(false);
+            }
+
+            if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+                setNotificationOpen(false);
             }
         };
 
-        document.addEventListener("mousedown", closeMenus);
+        window.addEventListener("mousedown", handler);
 
         return () => {
-            document.removeEventListener("mousedown", closeMenus);
+            window.removeEventListener("mousedown", handler);
         };
     }, []);
 
+    useEffect(() => {
+        setMobileOpen(false);
+        setMoreOpen(false);
+        setProfileOpen(false);
+        setNotificationOpen(false);
+    }, [pathname]);
+
     return (
-        <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--surface)] px-4 md:px-6">
-            <div className="flex min-w-0 items-center gap-4">
-                <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                        <h1 className="truncate text-sm font-semibold tracking-[-0.02em] text-[var(--text)]">
-                            {pageTitle}
-                        </h1>
+        <header className="fixed left-0 right-0 top-0 z-[80] border-b border-[var(--chronos-line)] bg-[var(--chronos-canvas)]/82 backdrop-blur-2xl">
+            <div className="mx-auto flex h-20 max-w-[1600px] items-center justify-between gap-3 px-4 sm:px-6 md:px-10 lg:px-14 xl:px-20">
+                <button
+                    type="button"
+                    onClick={() => router.push("/dashboard")}
+                    className="group flex min-w-0 items-center gap-3 text-left"
+                >
+                    <AppLogo size="md" />
 
-                        <span className="hidden h-1 w-1 rounded-full bg-[var(--text-muted)] sm:block" />
-
-                        <span className="hidden text-xs font-medium text-[var(--text-muted)] sm:block">
-                            Account Manager
+                    <span className="hidden min-w-0 sm:block">
+                        <span className="block truncate text-sm font-medium text-[var(--chronos-ink)] transition duration-700 group-hover:text-[var(--chronos-olive)]">
+                            MIMICO
                         </span>
-                    </div>
+                        <span className="chronos-label mt-1 block truncate">{pageTitle}</span>
+                    </span>
+                </button>
 
-                    <p className="hidden text-xs text-[var(--text-muted)] md:block">
-                        Manage accounts, publishing queues, and platform workflows.
-                    </p>
-                </div>
-            </div>
+                <nav className="hidden items-center gap-2 xl:flex">
+                    {primaryNav.map((item) => (
+                        <NavButton
+                            key={item.href}
+                            item={item}
+                            active={isActiveRoute(item.href)}
+                            onClick={() => router.push(item.href)}
+                        />
+                    ))}
 
-            <div className="mx-4 hidden max-w-xl flex-1 lg:block">
-                <div className="group relative">
-                    <input
-                        type="text"
-                        placeholder="Search posts, contacts, accounts..."
-                        className="linear-input h-9 pl-9 pr-20"
-                    />
+                    <div ref={moreRef} className="relative">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setMoreOpen((current) => !current);
+                                setNotificationOpen(false);
+                                setProfileOpen(false);
+                            }}
+                            className={`chronos-button h-10 ${moreNav.some((item) => isActiveRoute(item.href)) ? "" : "chronos-button-soft"}`}
+                        >
+                            <MoreHorizontal className="h-4 w-4" strokeWidth={1.75} />
+                            More
+                            <ChevronDown
+                                className={`h-4 w-4 transition duration-700 ${moreOpen ? "rotate-180" : ""}`}
+                                strokeWidth={1.75}
+                            />
+                        </button>
 
-                    <div className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 items-center gap-1 xl:flex">
-                        <kbd>
-                            <Command className="h-3 w-3" strokeWidth={1.5} />
-                        </kbd>
-                        <kbd>K</kbd>
-                    </div>
-                </div>
-            </div>
-
-            <div className="flex shrink-0 items-center gap-2">
-                <ThemeToggle />
-
-                <div ref={notificationRef} className="relative">
-                    <button
-                        type="button"
-                        onClick={() => setNotificationsOpen((current) => !current)}
-                        className="linear-button-secondary relative h-9 w-9 p-0"
-                        aria-label="Notifications"
-                    >
-                        <Bell className="h-4 w-4" strokeWidth={1.5} />
-
-                        {unreadCount > 0 && (
-                            <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[10px] font-semibold text-white">
-                                {unreadCount > 9 ? "9+" : unreadCount}
-                            </span>
+                        {moreOpen && (
+                            <Dropdown className="right-0 mt-3 w-64">
+                                {moreNav.map((item) => (
+                                    <DropdownItem
+                                        key={item.href}
+                                        icon={item.icon}
+                                        label={item.label}
+                                        active={isActiveRoute(item.href)}
+                                        onClick={() => router.push(item.href)}
+                                    />
+                                ))}
+                            </Dropdown>
                         )}
-                    </button>
+                    </div>
+                </nav>
 
-                    {notificationsOpen && (
-                        <div className="linear-popover absolute right-0 top-11 w-[360px] overflow-hidden">
-                            <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
-                                <div>
-                                    <h3 className="text-sm font-semibold text-[var(--text)]">Notifications</h3>
-                                    <p className="mt-1 text-xs text-[var(--text-muted)]">
-                                        {unreadCount} unread item(s)
-                                    </p>
-                                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                    <div ref={notificationRef} className="relative">
+                        <button
+                            type="button"
+                            onClick={toggleNotifications}
+                            className={`chronos-button relative w-14 px-0 ${notificationOpen ? "" : "chronos-button-soft"}`}
+                        >
+                            <Bell className="h-4 w-4" strokeWidth={1.75} />
 
-                                <div className="flex items-center gap-1">
+                            {unreadCount > 0 && (
+                                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border border-[var(--chronos-canvas)] bg-[var(--chronos-danger)] px-1 text-[10px] font-medium text-white">
+                                    {unreadCount > 9 ? "9+" : unreadCount}
+                                </span>
+                            )}
+                        </button>
+
+                        {notificationOpen && (
+                            <Dropdown className="right-0 mt-3 w-[calc(100vw-2rem)] max-w-[420px]">
+                                <div className="flex items-center justify-between gap-3 border-b border-[var(--chronos-line)] p-4">
+                                    <div>
+                                        <p className="chronos-label">Notifications</p>
+                                        <h3 className="mt-1 text-lg font-light tracking-[-0.05em] text-[var(--chronos-ink)]">
+                                            Publishing alerts
+                                        </h3>
+                                    </div>
+
                                     <button
                                         type="button"
                                         onClick={loadNotifications}
-                                        disabled={notificationsLoading}
-                                        className="linear-button-secondary h-8 w-10 p-0"
+                                        disabled={notificationLoading}
+                                        className="chronos-button w-14 px-0"
                                     >
-                                        {notificationsLoading ? (
-                                            <Loader2 className="h-6 w-6 animate-spin" strokeWidth={2} />
+                                        {notificationLoading ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
                                         ) : (
-                                            <RefreshCw className="h-6 w-6" strokeWidth={1.5} />
+                                            <RefreshCw className="h-4 w-4" strokeWidth={1.75} />
                                         )}
                                     </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={markAllAsRead}
-                                        disabled={notifications.length === 0}
-                                        className="linear-button-secondary h-8 px-3 text-xs"
-                                    >
-                                        Mark read
-                                    </button>
                                 </div>
-                            </div>
 
-                            <div className="custom-scrollbar max-h-[420px] overflow-y-auto">
-                                {notificationError ? (
-                                    <div className="p-4 text-sm text-red-300">{notificationError}</div>
-                                ) : notificationsLoading && notifications.length === 0 ? (
-                                    <div className="flex items-center justify-center gap-3 px-4 py-10">
+                                {notifications.length > 0 && (
+                                    <div className="flex gap-2 border-b border-[var(--chronos-line)] p-3">
+                                        <button
+                                            type="button"
+                                            onClick={markAllNotificationsAsRead}
+                                            className="chronos-button chronos-button-soft h-9 flex-1"
+                                        >
+                                            <Check className="h-4 w-4" strokeWidth={1.75} />
+                                            Mark all read
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={clearAllNotifications}
+                                            className="chronos-button chronos-button-soft h-9 flex-1 border-[var(--chronos-danger)] text-[var(--chronos-danger)] hover:bg-[var(--chronos-danger)] hover:text-[#090A0D]"
+                                        >
+                                            <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+                                            Clear all
+                                        </button>
+                                    </div>
+                                )}
+
+                                {notificationLoading ? (
+                                    <div className="flex items-center justify-center gap-3 p-6">
                                         <Loader2
-                                            className="h-4 w-4 animate-spin text-[var(--accent)]"
-                                            strokeWidth={1.5}
+                                            className="h-4 w-4 animate-spin text-[var(--chronos-olive)]"
+                                            strokeWidth={1.75}
                                         />
-                                        <span className="text-sm font-medium text-[var(--text-soft)]">
-                                            Loading notifications
-                                        </span>
+                                        <span className="chronos-label">Loading alerts</span>
                                     </div>
                                 ) : notifications.length === 0 ? (
-                                    <div className="px-6 py-10 text-center">
-                                        <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--canvas)] text-[var(--success)]">
-                                            <CheckCircle2 className="h-5 w-5" strokeWidth={1.5} />
-                                        </div>
-
-                                        <h4 className="text-sm font-semibold text-[var(--text)]">All clear</h4>
-
-                                        <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">
-                                            No failed posts, upcoming scheduled work, or pending WhatsApp alerts.
+                                    <div className="p-6 text-center">
+                                        <CheckCircle2
+                                            className="mx-auto h-7 w-7 text-[var(--chronos-olive)]"
+                                            strokeWidth={1.75}
+                                        />
+                                        <p className="mt-3 text-sm font-medium text-[var(--chronos-ink)]">
+                                            No active alerts
+                                        </p>
+                                        <p className="mt-1 text-xs leading-5 text-[var(--chronos-muted)]">
+                                            Failed, processing, and queued posts will appear here.
                                         </p>
                                     </div>
                                 ) : (
-                                    <div className="divide-y divide-[var(--border)]">
-                                        {notifications.map((item) => {
-                                            const unread = !readNotificationIds.includes(item.id);
-
-                                            return (
-                                                <button
-                                                    key={item.id}
-                                                    type="button"
-                                                    onClick={() => openNotification(item)}
-                                                    className="flex w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--surface-hover)]"
-                                                >
-                                                    <div
-                                                        className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border ${
-                                                            item.level === "danger"
-                                                                ? "border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.08)] text-red-300"
-                                                                : item.level === "warning"
-                                                                  ? "border-[rgba(245,158,11,0.25)] bg-[rgba(245,158,11,0.08)] text-[var(--warning)]"
-                                                                  : item.source === "whatsapp"
-                                                                    ? "border-[rgba(34,197,94,0.22)] bg-[rgba(34,197,94,0.08)] text-[var(--success)]"
-                                                                    : "border-[rgba(94,106,210,0.28)] bg-[rgba(94,106,210,0.09)] text-[var(--accent)]"
-                                                        }`}
-                                                    >
-                                                        {item.level === "danger" ? (
-                                                            <AlertTriangle className="h-4 w-4" strokeWidth={1.5} />
-                                                        ) : item.source === "whatsapp" ? (
-                                                            <MessageCircle className="h-4 w-4" strokeWidth={1.5} />
-                                                        ) : (
-                                                            <CalendarClock className="h-4 w-4" strokeWidth={1.5} />
-                                                        )}
-                                                    </div>
-
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="flex items-center gap-2">
-                                                            <h4 className="truncate text-sm font-medium text-[var(--text)]">
-                                                                {item.title}
-                                                            </h4>
-
-                                                            {unread && (
-                                                                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent)]" />
-                                                            )}
-                                                        </div>
-
-                                                        <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--text-soft)]">
-                                                            {item.message}
-                                                        </p>
-
-                                                        <p className="mt-1 text-[11px] text-[var(--text-muted)]">
-                                                            {item.time}
-                                                        </p>
-                                                    </div>
-                                                </button>
-                                            );
-                                        })}
+                                    <div className="max-h-[360px] overflow-y-auto">
+                                        {notifications.map((item) => (
+                                            <NotificationRow
+                                                key={item.id}
+                                                item={item}
+                                                onOpen={() => openNotification(item.id)}
+                                                onRead={() => markNotificationAsRead(item.id)}
+                                                onDelete={() => deleteNotification(item.id)}
+                                            />
+                                        ))}
                                     </div>
                                 )}
-                            </div>
-                        </div>
-                    )}
-                </div>
 
-                <div className="mx-1 hidden h-6 w-px bg-[var(--border)] sm:block" />
-
-                <div ref={profileRef} className="relative">
-                    <button
-                        type="button"
-                        onClick={() => setProfileOpen((current) => !current)}
-                        className="group flex h-9 items-center gap-2 rounded-md border border-transparent px-1.5 transition-colors hover:border-[var(--border)] hover:bg-[var(--surface-hover)]"
-                    >
-                        <span className="flex h-7 w-7 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--surface-3)] text-xs font-semibold text-[var(--text)] shadow-[var(--shadow-line)]">
-                            {loadingUser ? "..." : initials}
-                        </span>
-
-                        <span className="hidden min-w-0 text-left md:block">
-                            <span className="block max-w-[130px] truncate text-xs font-medium text-[var(--text)]">
-                                {loadingUser ? "Loading..." : user ? `${user.firstName} ${user.lastName}` : "Account"}
-                            </span>
-                        </span>
-
-                        <ChevronDown
-                            className={`hidden h-4 w-4 text-[var(--text-muted)] transition-transform group-hover:text-[var(--text-soft)] md:block ${profileOpen ? "rotate-180" : ""}`}
-                            strokeWidth={1.5}
-                        />
-                    </button>
-
-                    {profileOpen && (
-                        <div className="linear-popover absolute right-0 top-11 w-[280px] overflow-hidden">
-                            <div className="border-b border-[var(--border)] p-4">
-                                <div className="flex items-center gap-3">
-                                    <span className="flex h-10 w-10 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--surface-3)] text-sm font-semibold text-[var(--text)]">
-                                        {initials}
-                                    </span>
-
-                                    <div className="min-w-0">
-                                        <h3 className="truncate text-sm font-semibold text-[var(--text)]">
-                                            {user ? `${user.firstName} ${user.lastName}` : "Account"}
-                                        </h3>
-
-                                        <p className="truncate text-xs text-[var(--text-muted)]">
-                                            {user?.email || "Signed in user"}
-                                        </p>
-                                    </div>
+                                <div className="border-t border-[var(--chronos-line)] p-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => router.push("/publishing")}
+                                        className="chronos-button chronos-button-soft w-full"
+                                    >
+                                        Open publishing
+                                        <Send className="h-4 w-4" strokeWidth={1.75} />
+                                    </button>
                                 </div>
-                            </div>
+                            </Dropdown>
+                        )}
+                    </div>
 
-                            <div className="p-2">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setProfileOpen(false);
-                                        router.push("/dashboard");
-                                    }}
-                                    className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-[var(--text-soft)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]"
-                                >
-                                    <LayoutDashboard className="h-4 w-4" strokeWidth={1.5} />
-                                    Dashboard
-                                </button>
+                    <ThemeToggle />
 
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setProfileOpen(false);
-                                        router.push("/publishing");
-                                    }}
-                                    className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-[var(--text-soft)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]"
-                                >
-                                    <Send className="h-4 w-4" strokeWidth={1.5} />
-                                    Publishing
-                                </button>
+                    <div ref={profileRef} className="relative hidden sm:block">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setProfileOpen((current) => !current);
+                                setNotificationOpen(false);
+                                setMoreOpen(false);
+                            }}
+                            className="flex h-10 items-center gap-3 rounded-full border border-[var(--chronos-line-strong)] bg-[var(--chronos-olive)]/5 px-2 pr-3 transition hover:border-[var(--chronos-olive)]"
+                        >
+                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--chronos-olive)] text-xs font-semibold text-[#090A0D]">
+                                {loadingUser ? "..." : initials}
+                            </span>
 
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setProfileOpen(false);
-                                        router.push("/analytics");
-                                    }}
-                                    className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-[var(--text-soft)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]"
-                                >
-                                    <UserCircle className="h-4 w-4" strokeWidth={1.5} />
-                                    Analytics
-                                </button>
-                            </div>
+                            <span className="hidden max-w-[130px] truncate text-xs font-medium text-[var(--chronos-ink)] md:block">
+                                {user ? `${user.firstName} ${user.lastName}` : "Operator"}
+                            </span>
 
-                            <div className="border-t border-[var(--border)] p-2">
-                                <button
-                                    type="button"
-                                    onClick={handleLogout}
-                                    className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-red-300 hover:bg-[rgba(239,68,68,0.08)] hover:text-red-200"
-                                >
-                                    <LogOut className="h-4 w-4" strokeWidth={1.5} />
-                                    Logout
-                                </button>
-                            </div>
-                        </div>
-                    )}
+                            <ChevronDown
+                                className={`h-4 w-4 text-[var(--chronos-muted)] transition duration-700 ${profileOpen ? "rotate-180" : ""}`}
+                                strokeWidth={1.75}
+                            />
+                        </button>
+
+                        {profileOpen && (
+                            <Dropdown className="right-0 mt-3 w-72">
+                                <div className="border-b border-[var(--chronos-line)] p-4">
+                                    <p className="truncate text-sm font-medium text-[var(--chronos-ink)]">
+                                        {user ? `${user.firstName} ${user.lastName}` : "Operator"}
+                                    </p>
+                                    <p className="mt-1 truncate text-xs text-[var(--chronos-muted)]">
+                                        {user?.email || "Workspace user"}
+                                    </p>
+                                </div>
+
+                                <DropdownItem icon={Send} label="New post" onClick={() => router.push("/publishing")} />
+                                <DropdownItem
+                                    icon={UserCircle}
+                                    label="Dashboard"
+                                    onClick={() => router.push("/dashboard")}
+                                />
+                                <DropdownItem icon={LogOut} label="Logout" danger onClick={logout} />
+                            </Dropdown>
+                        )}
+                    </div>
+
+                    <div className="flex xl:hidden">
+                        <button
+                            type="button"
+                            onClick={() => setMobileOpen((current) => !current)}
+                            className="chronos-button w-14 px-0 xl:hidden"
+                        >
+                            {mobileOpen ? (
+                                <X className="h-4 w-4" strokeWidth={1.75} />
+                            ) : (
+                                <Menu className="h-4 w-4" strokeWidth={1.75} />
+                            )}
+                        </button>
+                    </div>
                 </div>
             </div>
+
+            {mobileOpen && (
+                <div className="border-t border-[var(--chronos-line)] bg-[var(--chronos-sheet)]/96 px-4 py-4 shadow-[0_30px_120px_rgba(0,0,0,0.45)] backdrop-blur-2xl xl:hidden">
+                    <div className="mx-auto max-w-[1600px] space-y-2">
+                        {allMobileNav.map((item) => (
+                            <button
+                                key={item.href}
+                                type="button"
+                                onClick={() => router.push(item.href)}
+                                className={`flex w-full items-center gap-3 rounded-[20px] border px-4 py-3 text-left text-sm transition ${
+                                    isActiveRoute(item.href)
+                                        ? "border-[var(--chronos-olive)] bg-[var(--chronos-olive)]/10 text-[var(--chronos-ink)]"
+                                        : "border-[var(--chronos-line)] text-[var(--chronos-muted)] hover:border-[var(--chronos-olive)] hover:text-[var(--chronos-ink)]"
+                                }`}
+                            >
+                                <item.icon className="h-4 w-4 shrink-0" />
+                                {item.label}
+                            </button>
+                        ))}
+
+                        <div className="grid gap-3 pt-3 sm:grid-cols-2">
+                            <button
+                                type="button"
+                                onClick={() => router.push("/publishing")}
+                                className="chronos-button w-full"
+                            >
+                                <Send className="h-4 w-4" strokeWidth={1.75} />
+                                New post
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={logout}
+                                className="chronos-button chronos-button-soft w-full border-[var(--chronos-danger)] text-[var(--chronos-danger)] hover:bg-[var(--chronos-danger)] hover:text-[#090A0D]"
+                            >
+                                <LogOut className="h-4 w-4" strokeWidth={1.75} />
+                                Logout
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </header>
+    );
+}
+
+function NavButton({ item, active, onClick }: { item: NavItem; active: boolean; onClick: () => void }) {
+    const Icon = item.icon;
+
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className={`chronos-button h-10 ${active ? "" : "chronos-button-soft"}`}
+        >
+            <Icon className="h-4 w-4" strokeWidth={1.75} />
+            {item.label}
+        </button>
+    );
+}
+
+function Dropdown({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+    return (
+        <div
+            className={`absolute z-[120] overflow-hidden rounded-[24px] border border-[var(--chronos-line-strong)] bg-[var(--chronos-sheet)]/96 shadow-[0_30px_120px_rgba(0,0,0,0.45)] backdrop-blur-2xl ${className}`}
+        >
+            {children}
+        </div>
+    );
+}
+
+function DropdownItem({
+    icon: Icon,
+    label,
+    active,
+    danger,
+    onClick,
+}: {
+    icon: ElementType;
+    label: string;
+    active?: boolean;
+    danger?: boolean;
+    onClick: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition hover:bg-[var(--chronos-olive)]/5 ${
+                danger
+                    ? "text-[var(--chronos-danger)]"
+                    : active
+                      ? "text-[var(--chronos-olive-soft)]"
+                      : "text-[var(--chronos-muted)] hover:text-[var(--chronos-ink)]"
+            }`}
+        >
+            <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+            {label}
+
+            {active && <CheckCircle2 className="ml-auto h-4 w-4 text-[var(--chronos-olive)]" strokeWidth={1.75} />}
+        </button>
+    );
+}
+
+function NotificationRow({
+    item,
+    onOpen,
+    onRead,
+    onDelete,
+}: {
+    item: NotificationItem;
+    onOpen: () => void;
+    onRead: () => void;
+    onDelete: () => void;
+}) {
+    const Icon = item.type === "failed" ? AlertTriangle : item.type === "processing" ? Loader2 : Clock;
+
+    return (
+        <div
+            className={`border-b border-[var(--chronos-line)] p-4 transition last:border-b-0 hover:bg-[var(--chronos-olive)]/5 ${
+                item.read ? "opacity-60" : ""
+            }`}
+        >
+            <div className="flex items-start gap-3">
+                <button
+                    type="button"
+                    onClick={onOpen}
+                    className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border ${
+                        item.type === "failed"
+                            ? "border-[var(--chronos-danger)]/45 text-[var(--chronos-danger)]"
+                            : "border-[var(--chronos-line-strong)] text-[var(--chronos-olive)]"
+                    }`}
+                >
+                    <Icon
+                        className={`h-4 w-4 ${item.type === "processing" ? "animate-spin" : ""}`}
+                        strokeWidth={1.75}
+                    />
+                </button>
+
+                <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
+                    <span className="flex items-center gap-2">
+                        {!item.read && <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--chronos-danger)]" />}
+                        <span className="block truncate text-sm font-medium text-[var(--chronos-ink)]">
+                            {item.title}
+                        </span>
+                    </span>
+
+                    <span className="mt-1 line-clamp-2 block text-xs leading-5 text-[var(--chronos-muted)]">
+                        {item.text}
+                    </span>
+
+                    <span className="mt-2 block text-[10px] uppercase tracking-[0.14em] text-[var(--chronos-muted)]">
+                        {item.time}
+                    </span>
+                </button>
+            </div>
+
+            <div className="mt-3 flex gap-2 pl-12">
+                <button
+                    type="button"
+                    onClick={onRead}
+                    disabled={item.read}
+                    className="chronos-button chronos-button-soft h-8 px-3 text-[10px]"
+                >
+                    <Check className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    {item.read ? "Read" : "Mark read"}
+                </button>
+
+                <button
+                    type="button"
+                    onClick={onDelete}
+                    className="chronos-button chronos-button-soft h-8 border-[var(--chronos-danger)] px-3 text-[10px] text-[var(--chronos-danger)] hover:bg-[var(--chronos-danger)] hover:text-[#090A0D]"
+                >
+                    <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    Delete
+                </button>
+            </div>
+        </div>
     );
 }

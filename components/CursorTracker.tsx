@@ -1,59 +1,72 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { motion } from "framer-motion"
+import { useEffect, useState } from "react";
+import { motion, useMotionValue, useSpring } from "framer-motion";
 
 export default function CursorTracker() {
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
+    const [mounted, setMounted] = useState(false);
+    const mouseX = useMotionValue(-100);
+    const mouseY = useMotionValue(-100);
 
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      setMousePos({
-        x: e.clientX,
-        y: e.clientY,
-      })
+    const smoothX = useSpring(mouseX, {
+        stiffness: 90,
+        damping: 28,
+        mass: 0.7,
+    });
+
+    const smoothY = useSpring(mouseY, {
+        stiffness: 90,
+        damping: 28,
+        mass: 0.7,
+    });
+
+    useEffect(() => {
+        setMounted(true);
+
+        const handleMouseMove = (event: MouseEvent) => {
+            mouseX.set(event.clientX);
+            mouseY.set(event.clientY);
+        };
+
+        window.addEventListener("mousemove", handleMouseMove);
+
+        return () => {
+            window.removeEventListener("mousemove", handleMouseMove);
+        };
+    }, [mouseX, mouseY]);
+
+    if (!mounted) {
+        return null;
     }
 
-    window.addEventListener("mousemove", handleMouseMove)
+    return (
+        <>
+            <motion.div
+                className="pointer-events-none fixed left-0 top-0 z-[200] hidden h-8 w-8 rounded-full border border-[var(--chronos-olive)]/45 mix-blend-difference md:block"
+                style={{
+                    x: smoothX,
+                    y: smoothY,
+                    translateX: "-50%",
+                    translateY: "-50%",
+                }}
+            />
 
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove)
-    }
-  }, [])
+            <motion.div
+                className="pointer-events-none fixed left-0 top-0 z-[201] hidden h-1.5 w-1.5 rounded-full bg-[var(--chronos-olive)] md:block"
+                style={{
+                    x: mouseX,
+                    y: mouseY,
+                    translateX: "-50%",
+                    translateY: "-50%",
+                }}
+            />
 
-  return (
-    <>
-      {/* Outer ring */}
-      <motion.div
-        className="fixed top-0 left-0 w-8 h-8 rounded-full border border-purple-500/50 pointer-events-none z-[9999]"
-        animate={{ x: mousePos.x - 16, y: mousePos.y - 16 }}
-        transition={{
-          type: "spring",
-          damping: 20,
-          stiffness: 250,
-          mass: 0.5,
-        }}
-      />
-
-      {/* Center dot */}
-      <motion.div
-        className="fixed top-0 left-0 w-1 h-1 bg-purple-500 rounded-full pointer-events-none z-[9999]"
-        animate={{ x: mousePos.x - 2, y: mousePos.y - 2 }}
-        transition={{
-          type: "spring",
-          damping: 10,
-          stiffness: 500,
-          mass: 0.1,
-        }}
-      />
-
-      {/* Glow */}
-      <div
-        className="fixed inset-0 pointer-events-none z-0"
-        style={{
-          background: `radial-gradient(600px at ${mousePos.x}px ${mousePos.y}px, rgba(139, 92, 246, 0.05), transparent 80%)`,
-        }}
-      />
-    </>
-  )
+            <motion.div
+                className="pointer-events-none fixed inset-0 z-0 hidden md:block"
+                style={{
+                    background: `radial-gradient(520px at ${smoothX.get()}px ${smoothY.get()}px, rgba(142, 161, 89, 0.055), transparent 72%)`,
+                }}
+            />
+        </>
+    );
 }

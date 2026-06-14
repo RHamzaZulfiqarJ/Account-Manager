@@ -14,15 +14,15 @@ const sizes = {
     },
     md: {
         box: "h-10 w-10",
-        image: "h-8 w-8",
-        width: 32,
-        height: 32,
+        image: "h-7 w-7",
+        width: 28,
+        height: 28,
     },
     lg: {
         box: "h-12 w-12",
-        image: "h-10 w-10",
-        width: 40,
-        height: 40,
+        image: "h-9 w-9",
+        width: 36,
+        height: 36,
     },
 };
 
@@ -31,7 +31,7 @@ export default function AppLogo({ size = "md", className = "" }: AppLogoProps) {
 
     return (
         <span
-            className={`flex ${selectedSize.box} items-center justify-center overflow-hidden rounded-md ${className}`}
+            className={`flex ${selectedSize.box} items-center justify-center overflow-hidden rounded-full border border-[var(--chronos-line-strong)] bg-[var(--chronos-olive)]/10 shadow-[0_18px_70px_var(--chronos-glow)] ${className}`}
         >
             <Image
                 src="/android-chrome-192x192.png"

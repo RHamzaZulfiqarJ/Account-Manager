@@ -1,21 +1,19 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-    AlertTriangle,
-    CalendarDays,
     ChevronLeft,
     ChevronRight,
-    Clock,
     Loader2,
     Plus,
     Send,
     Trash2,
+    X,
 } from "lucide-react";
 import { PLATFORMS } from "@/libs/platform";
 
-type CalendarPost = {
+type Post = {
     id: string;
     content: string;
     status: "pending" | "processing" | "posted" | "failed";
@@ -29,348 +27,361 @@ type CalendarPost = {
     };
 };
 
-type PublishingCalendarProps = {
-    posts: CalendarPost[];
+type Props = {
+    posts: Post[];
     onCompose: () => void;
-    onDelete: (post: CalendarPost) => void;
+    onDelete: (post: Post) => Promise<void>;
     deletingPostId: string | null;
 };
 
-const getDateKey = (date: Date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-
-    return `${year}-${month}-${day}`;
+const STATUS_DOT: Record<Post["status"], string> = {
+    posted: "bg-[var(--chronos-olive)]",
+    pending: "bg-[var(--chronos-olive-soft)]",
+    processing: "bg-[var(--chronos-muted)]",
+    failed: "bg-[var(--chronos-danger)]",
 };
 
-const getStatusClass = (status: CalendarPost["status"]) => {
-    if (status === "posted") return "bg-emerald-500/10 text-emerald-300 border-emerald-500/20";
-    if (status === "pending") return "bg-amber-500/10 text-amber-300 border-amber-500/20";
-    if (status === "processing") return "bg-purple-500/10 text-purple-300 border-purple-500/20";
-    return "bg-red-500/10 text-red-300 border-red-500/20";
+const STATUS_BADGE: Record<Post["status"], string> = {
+    posted: "border-[var(--chronos-olive)] text-[var(--chronos-olive-soft)]",
+    pending: "border-[var(--chronos-olive-soft)] text-[var(--chronos-body)]",
+    processing: "border-[var(--chronos-line-strong)] text-[var(--chronos-muted)]",
+    failed: "border-[var(--chronos-danger)] text-[var(--chronos-danger)]",
 };
 
-const getDotClass = (status: CalendarPost["status"]) => {
-    if (status === "posted") return "bg-emerald-400";
-    if (status === "pending") return "bg-amber-400";
-    if (status === "processing") return "bg-purple-400";
-    return "bg-red-400";
-};
+function getPostDate(post: Post): Date {
+    return new Date(post.postedAt || post.scheduledAt || post.createdAt);
+}
 
-export default function PublishingCalendar({ posts, onCompose, onDelete, deletingPostId }: PublishingCalendarProps) {
-    const [activeMonth, setActiveMonth] = useState(() => new Date());
-    const [selectedDate, setSelectedDate] = useState(() => new Date());
+function isSameDay(a: Date, b: Date) {
+    return (
+        a.getFullYear() === b.getFullYear() &&
+        a.getMonth() === b.getMonth() &&
+        a.getDate() === b.getDate()
+    );
+}
 
-    const scheduledPosts = useMemo(() => {
-        return posts
-            .filter((post) => Boolean(post.scheduledAt))
-            .sort((a, b) => {
-                return (
-                    new Date(a.scheduledAt || a.createdAt).getTime() - new Date(b.scheduledAt || b.createdAt).getTime()
-                );
-            });
-    }, [posts]);
+function isToday(date: Date) {
+    return isSameDay(date, new Date());
+}
 
-    const postsByDate = useMemo(() => {
-        return scheduledPosts.reduce<Record<string, CalendarPost[]>>((acc, post) => {
-            if (!post.scheduledAt) return acc;
+export default function PublishingCalendar({ posts, onCompose, onDelete, deletingPostId }: Props) {
+    const today = new Date();
+    const [year, setYear] = useState(today.getFullYear());
+    const [month, setMonth] = useState(today.getMonth());
+    const [selectedDay, setSelectedDay] = useState<Date | null>(null);
 
-            const key = getDateKey(new Date(post.scheduledAt));
+    const daysInMonth = useMemo(() => new Date(year, month + 1, 0).getDate(), [year, month]);
+    const firstDayOfWeek = useMemo(() => new Date(year, month, 1).getDay(), [year, month]);
 
-            if (!acc[key]) {
-                acc[key] = [];
+    // Build a map of date-string → posts for fast lookup
+    const postsByDay = useMemo(() => {
+        const map: Record<string, Post[]> = {};
+        for (const post of posts) {
+            const d = getPostDate(post);
+            if (d.getFullYear() === year && d.getMonth() === month) {
+                const key = d.getDate().toString();
+                (map[key] ??= []).push(post);
             }
+        }
+        return map;
+    }, [posts, year, month]);
 
-            acc[key].push(post);
+    const selectedDayPosts = useMemo(
+        () =>
+            selectedDay
+                ? posts.filter((p) => isSameDay(getPostDate(p), selectedDay))
+                : [],
+        [posts, selectedDay],
+    );
 
-            return acc;
-        }, {});
-    }, [scheduledPosts]);
-
-    const calendarDays = useMemo(() => {
-        const year = activeMonth.getFullYear();
-        const month = activeMonth.getMonth();
-        const firstDay = new Date(year, month, 1);
-        const start = new Date(year, month, 1 - firstDay.getDay());
-
-        return Array.from({ length: 42 }, (_, index) => {
-            const date = new Date(start);
-            date.setDate(start.getDate() + index);
-            return date;
-        });
-    }, [activeMonth]);
-
-    const selectedDateKey = getDateKey(selectedDate);
-    const selectedPosts = postsByDate[selectedDateKey] || [];
-    const todayKey = getDateKey(new Date());
-
-    const moveMonth = (value: number) => {
-        setActiveMonth((current) => {
-            const next = new Date(current);
-            next.setMonth(current.getMonth() + value);
-            return next;
-        });
+    const prevMonth = () => {
+        if (month === 0) { setMonth(11); setYear((y) => y - 1); }
+        else setMonth((m) => m - 1);
     };
 
-    const goToday = () => {
-        const today = new Date();
-        setActiveMonth(today);
-        setSelectedDate(today);
+    const nextMonth = () => {
+        if (month === 11) { setMonth(0); setYear((y) => y + 1); }
+        else setMonth((m) => m + 1);
     };
+
+    const monthLabel = new Date(year, month, 1).toLocaleString("default", { month: "long", year: "numeric" });
+    const WEEK_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+    // Build calendar grid: leading empty cells + day cells
+    const cells: (number | null)[] = [
+        ...Array.from({ length: firstDayOfWeek }, () => null),
+        ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+    ];
 
     return (
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-6 p-6">
-            <div className="rounded-2xl border border-white/5 bg-gray-950/40 overflow-hidden">
-                <div className="p-5 border-b border-white/5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div>
-                        <h3 className="text-white font-bold flex items-center gap-2">
-                            <CalendarDays className="w-5 h-5 text-purple-300" />
-                            {activeMonth.toLocaleDateString(undefined, {
-                                month: "long",
-                                year: "numeric",
-                            })}
-                        </h3>
+        <div className="flex flex-col lg:flex-row">
+            {/* Calendar grid */}
+            <div className="flex-1 p-4 sm:p-5">
+                {/* Month navigation */}
+                <div className="mb-4 flex items-center justify-between">
+                    <button
+                        type="button"
+                        onClick={prevMonth}
+                        className="chronos-button chronos-button-soft w-14 p-0"
+                        aria-label="Previous month"
+                    >
+                        <ChevronLeft className="h-4 w-4" strokeWidth={1.75} />
+                    </button>
 
-                        <p className="text-sm text-gray-500 mt-1">
-                            Showing {scheduledPosts.length} scheduled {scheduledPosts.length === 1 ? "post" : "posts"}
-                        </p>
-                    </div>
+                    <p className="text-sm font-medium tracking-[-0.02em] text-[var(--chronos-ink)]">
+                        {monthLabel}
+                    </p>
 
-                    <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={() => moveMonth(-1)}
-                            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 transition"
-                        >
-                            <ChevronLeft className="w-5 h-5" />
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={goToday}
-                            className="px-4 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-200 text-sm font-semibold border border-purple-500/20 transition"
-                        >
-                            Today
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => moveMonth(1)}
-                            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 transition"
-                        >
-                            <ChevronRight className="w-5 h-5" />
-                        </button>
-                    </div>
+                    <button
+                        type="button"
+                        onClick={nextMonth}
+                        className="chronos-button chronos-button-soft w-14 p-0"
+                        aria-label="Next month"
+                    >
+                        <ChevronRight className="h-5 w-5" strokeWidth={1.75} />
+                    </button>
                 </div>
 
-                <div className="grid grid-cols-7 border-b border-white/5 bg-white/[0.03]">
-                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                {/* Weekday headers */}
+                <div className="mb-1 grid grid-cols-7 text-center">
+                    {WEEK_DAYS.map((d) => (
                         <div
-                            key={day}
-                            className="p-3 text-center text-xs font-bold text-gray-500 uppercase tracking-widest"
+                            key={d}
+                            className="py-2 text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--chronos-muted)]"
                         >
-                            {day}
+                            {d}
                         </div>
                     ))}
                 </div>
 
-                <div className="grid grid-cols-7">
-                    {calendarDays.map((date) => {
-                        const key = getDateKey(date);
-                        const dayPosts = postsByDate[key] || [];
-                        const isCurrentMonth = date.getMonth() === activeMonth.getMonth();
-                        const isToday = key === todayKey;
-                        const isSelected = key === selectedDateKey;
+                {/* Day cells */}
+                <div className="grid grid-cols-7 gap-px rounded-2xl overflow-hidden border border-[var(--chronos-line)] bg-[var(--chronos-line)]">
+                    {cells.map((day, idx) => {
+                        if (day === null) {
+                            return <div key={`empty-${idx}`} className="bg-[var(--chronos-surface)] min-h-[72px]" />;
+                        }
+
+                        const dayPosts = postsByDay[day.toString()] ?? [];
+                        const cellDate = new Date(year, month, day);
+                        const isSelected = selectedDay ? isSameDay(cellDate, selectedDay) : false;
+                        const todayCell = isToday(cellDate);
 
                         return (
                             <button
-                                key={key}
+                                key={day}
                                 type="button"
-                                onClick={() => setSelectedDate(date)}
-                                className={`min-h-32 p-3 text-left border-r border-b border-white/5 transition group ${
-                                    isSelected ? "bg-purple-600/15" : "hover:bg-white/[0.04]"
-                                } ${!isCurrentMonth ? "bg-black/20 text-gray-700" : "text-gray-300"}`}
+                                onClick={() => setSelectedDay(isSelected ? null : cellDate)}
+                                className={`
+                                    group relative flex min-h-[72px] flex-col items-start p-2 text-left transition-colors
+                                    ${isSelected
+                                        ? "bg-[var(--chronos-olive)]/10"
+                                        : "bg-[var(--chronos-surface)] hover:bg-[var(--chronos-olive)]/5"
+                                    }
+                                `}
                             >
-                                <div className="flex items-center justify-between mb-3">
-                                    <span
-                                        className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm font-bold ${
-                                            isToday
-                                                ? "bg-purple-600 text-white"
-                                                : isSelected
-                                                  ? "text-purple-200"
-                                                  : "text-gray-400"
-                                        }`}
-                                    >
-                                        {date.getDate()}
+                                <span
+                                    className={`
+                                        flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium
+                                        ${todayCell
+                                            ? "bg-[var(--chronos-olive)] text-[#090A0D]"
+                                            : "text-[var(--chronos-ink)]"
+                                        }
+                                    `}
+                                >
+                                    {day}
+                                </span>
+
+                                {dayPosts.length > 0 && (
+                                    <div className="mt-1.5 flex flex-wrap gap-1">
+                                        {dayPosts.slice(0, 3).map((p) => (
+                                            <span
+                                                key={p.id}
+                                                className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[p.status]}`}
+                                            />
+                                        ))}
+                                        {dayPosts.length > 3 && (
+                                            <span className="text-[9px] leading-none text-[var(--chronos-muted)]">
+                                                +{dayPosts.length - 3}
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+
+                                {dayPosts.length > 0 && (
+                                    <span className="absolute bottom-1.5 right-2 text-[9px] font-medium tracking-[0.04em] text-[var(--chronos-muted)]">
+                                        {dayPosts.length}
                                     </span>
-
-                                    {dayPosts.length > 0 && (
-                                        <span className="text-[10px] px-2 py-1 rounded-full bg-white/5 border border-white/5 text-gray-400">
-                                            {dayPosts.length}
-                                        </span>
-                                    )}
-                                </div>
-
-                                <div className="space-y-2">
-                                    {dayPosts.slice(0, 3).map((post) => {
-                                        const platform = PLATFORMS[post.socialAccount.platform];
-                                        const Icon = platform?.icon || Send;
-
-                                        return (
-                                            <div
-                                                key={post.id}
-                                                className="rounded-lg bg-gray-900/80 border border-white/5 p-2 overflow-hidden"
-                                            >
-                                                <div className="flex items-center gap-2">
-                                                    <span
-                                                        className={`w-2 h-2 rounded-full ${getDotClass(post.status)}`}
-                                                    />
-                                                    <Icon
-                                                        className={`w-3.5 h-3.5 ${platform?.color || "text-purple-300"}`}
-                                                    />
-                                                    <span className="text-[11px] text-gray-300 truncate">
-                                                        @{post.socialAccount.accountUsername}
-                                                    </span>
-                                                </div>
-
-                                                <p className="text-[11px] text-gray-500 truncate mt-1">
-                                                    {post.content}
-                                                </p>
-                                            </div>
-                                        );
-                                    })}
-
-                                    {dayPosts.length > 3 && (
-                                        <p className="text-[11px] text-purple-300 font-semibold">
-                                            +{dayPosts.length - 3} more
-                                        </p>
-                                    )}
-                                </div>
+                                )}
                             </button>
                         );
                     })}
                 </div>
+
+                {/* Legend */}
+                <div className="mt-4 flex flex-wrap items-center gap-4">
+                    {(["posted", "pending", "processing", "failed"] as Post["status"][]).map((s) => (
+                        <div key={s} className="flex items-center gap-1.5">
+                            <span className={`h-2 w-2 rounded-full ${STATUS_DOT[s]}`} />
+                            <span className="text-xs capitalize text-[var(--chronos-muted)]">{s}</span>
+                        </div>
+                    ))}
+                </div>
             </div>
 
-            <div className="rounded-2xl border border-white/5 bg-gray-950/40 overflow-hidden">
-                <div className="p-5 border-b border-white/5 bg-white/[0.03] flex items-center justify-between">
-                    <div>
-                        <h3 className="text-white font-bold">
-                            {selectedDate.toLocaleDateString(undefined, {
-                                weekday: "long",
-                                month: "short",
-                                day: "numeric",
-                            })}
-                        </h3>
+            {/* Sidebar: selected day detail */}
+            <div className="w-full border-t border-[var(--chronos-line)] lg:w-[320px] lg:border-l lg:border-t-0">
+                <AnimatePresence mode="wait">
+                    {selectedDay ? (
+                        <motion.div
+                            key={selectedDay.toISOString()}
+                            initial={{ opacity: 0, x: 12 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 12 }}
+                            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                            className="flex h-full flex-col"
+                        >
+                            {/* Header */}
+                            <div className="flex items-center justify-between border-b border-[var(--chronos-line)] px-4 py-3">
+                                <div>
+                                    <p className="chronos-label">
+                                        {selectedDay.toLocaleString("default", { weekday: "long" })}
+                                    </p>
+                                    <p className="mt-0.5 text-xl font-extralight tracking-[-0.05em] text-[var(--chronos-ink)]">
+                                        {selectedDay.toLocaleString("default", { month: "long", day: "numeric" })}
+                                    </p>
+                                </div>
 
-                        <p className="text-sm text-gray-500 mt-1">
-                            {selectedPosts.length} scheduled {selectedPosts.length === 1 ? "post" : "posts"}
-                        </p>
-                    </div>
-
-                    <button
-                        type="button"
-                        onClick={onCompose}
-                        className="p-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white transition"
-                    >
-                        <Plus className="w-5 h-5" />
-                    </button>
-                </div>
-
-                {scheduledPosts.length === 0 ? (
-                    <div className="p-8 text-center">
-                        <div className="w-14 h-14 mx-auto rounded-2xl bg-purple-600/10 border border-purple-500/20 flex items-center justify-center">
-                            <CalendarDays className="w-7 h-7 text-purple-300" />
-                        </div>
-
-                        <h3 className="text-white font-bold mt-5">No scheduled posts</h3>
-                        <p className="text-sm text-gray-500 mt-2">
-                            Scheduled posts matching your filters will appear here.
-                        </p>
-                    </div>
-                ) : selectedPosts.length === 0 ? (
-                    <div className="p-8 text-center">
-                        <div className="w-14 h-14 mx-auto rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center">
-                            <Clock className="w-7 h-7 text-gray-400" />
-                        </div>
-
-                        <h3 className="text-white font-bold mt-5">Nothing scheduled here</h3>
-                        <p className="text-sm text-gray-500 mt-2">Select another date or schedule a new post.</p>
-                    </div>
-                ) : (
-                    <div className="divide-y divide-white/5">
-                        {selectedPosts.map((post, index) => {
-                            const platform = PLATFORMS[post.socialAccount.platform];
-                            const Icon = platform?.icon || Send;
-                            const isDeleting = deletingPostId === post.id;
-
-                            return (
-                                <motion.div
-                                    key={post.id}
-                                    initial={{ opacity: 0, y: 8 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: index * 0.03 }}
-                                    className="p-5 hover:bg-white/[0.03] transition"
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedDay(null)}
+                                    className="chronos-button chronos-button-soft h-8 w-8 p-0"
+                                    aria-label="Close"
                                 >
-                                    <div className="flex items-start gap-3">
-                                        <div className="p-2 rounded-xl bg-gray-900 border border-white/5">
-                                            <Icon className={`w-5 h-5 ${platform?.color || "text-purple-300"}`} />
-                                        </div>
+                                    <X className="h-3.5 w-3.5" strokeWidth={1.75} />
+                                </button>
+                            </div>
 
-                                        <div className="min-w-0 flex-1">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <h4 className="text-white font-bold truncate">
-                                                    @{post.socialAccount.accountUsername}
-                                                </h4>
-
-                                                <span
-                                                    className={`px-2 py-1 rounded-lg border text-[10px] font-bold uppercase tracking-widest ${getStatusClass(post.status)}`}
-                                                >
-                                                    {post.status}
-                                                </span>
-                                            </div>
-
-                                            <p className="text-xs text-gray-500 mt-1">
-                                                {platform?.name || post.socialAccount.platform}
-                                            </p>
-
-                                            <p className="text-sm text-gray-300 mt-3 leading-relaxed break-words">
-                                                {post.content}
-                                            </p>
-
-                                            <div className="flex items-center gap-2 text-xs text-gray-500 mt-3">
-                                                <Clock className="w-3.5 h-3.5" />
-                                                {new Date(post.scheduledAt || post.createdAt).toLocaleString()}
-                                            </div>
-
-                                            {post.status === "failed" && (
-                                                <div className="mt-3 flex items-start gap-2 rounded-xl bg-red-500/10 border border-red-500/20 p-3 text-red-200">
-                                                    <AlertTriangle className="w-4 h-4 mt-0.5" />
-                                                    <p className="text-xs">This post failed during publishing.</p>
-                                                </div>
-                                            )}
-
-                                            <button
-                                                type="button"
-                                                onClick={() => onDelete(post)}
-                                                disabled={isDeleting || post.status === "processing"}
-                                                className="mt-4 inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-300 text-xs font-bold transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                            >
-                                                {isDeleting ? (
-                                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                                ) : (
-                                                    <Trash2 className="w-4 h-4" />
-                                                )}
-                                                Delete
-                                            </button>
-                                        </div>
+                            {/* Posts list */}
+                            <div className="flex-1 overflow-y-auto">
+                                {selectedDayPosts.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center gap-3 px-4 py-12 text-center">
+                                        <Send
+                                            className="h-7 w-7 text-[var(--chronos-olive)]"
+                                            strokeWidth={1.5}
+                                        />
+                                        <p className="text-sm text-[var(--chronos-muted)]">
+                                            No posts on this day.
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={onCompose}
+                                            className="chronos-button mt-1"
+                                        >
+                                            <Plus className="h-4 w-4" strokeWidth={1.75} />
+                                            Compose
+                                        </button>
                                     </div>
-                                </motion.div>
-                            );
-                        })}
-                    </div>
-                )}
+                                ) : (
+                                    <ul className="divide-y divide-[var(--chronos-line)]">
+                                        {selectedDayPosts.map((post) => {
+                                            const platform = PLATFORMS[post.socialAccount.platform];
+                                            const Icon = platform?.icon || Send;
+                                            const isDeleting = deletingPostId === post.id;
+                                            const postDate = getPostDate(post);
+
+                                            return (
+                                                <li key={post.id} className="p-4">
+                                                    {/* Account row */}
+                                                    <div className="flex items-center gap-2.5">
+                                                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--chronos-line-strong)] text-[var(--chronos-olive)]">
+                                                            <Icon className="h-3.5 w-3.5" />
+                                                        </span>
+
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="truncate text-xs font-medium text-[var(--chronos-ink)]">
+                                                                @{post.socialAccount.accountUsername}
+                                                            </p>
+                                                            <p className="text-[10px] text-[var(--chronos-muted)]">
+                                                                {platform?.name || post.socialAccount.platform}
+                                                            </p>
+                                                        </div>
+
+                                                        <span
+                                                            className={`chronos-pill text-[10px] ${STATUS_BADGE[post.status]}`}
+                                                        >
+                                                            {post.status}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Content */}
+                                                    <p className="mt-2.5 line-clamp-3 text-xs leading-5 text-[var(--chronos-muted)]">
+                                                        {post.content}
+                                                    </p>
+
+                                                    {/* Footer row */}
+                                                    <div className="mt-3 flex items-center justify-between gap-2">
+                                                        <p className="text-[10px] text-[var(--chronos-muted)]">
+                                                            {postDate.toLocaleTimeString([], {
+                                                                hour: "2-digit",
+                                                                minute: "2-digit",
+                                                            })}
+                                                        </p>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => onDelete(post)}
+                                                            disabled={isDeleting || post.status === "processing"}
+                                                            className="chronos-button chronos-button-soft h-7 border-[var(--chronos-danger)] text-[var(--chronos-danger)] hover:bg-[var(--chronos-danger)] hover:text-[#090A0D]"
+                                                        >
+                                                            {isDeleting ? (
+                                                                <Loader2
+                                                                    className="h-3 w-3 animate-spin"
+                                                                    strokeWidth={1.75}
+                                                                />
+                                                            ) : (
+                                                                <Trash2
+                                                                    className="h-3 w-3"
+                                                                    strokeWidth={1.75}
+                                                                />
+                                                            )}
+                                                            Delete
+                                                        </button>
+                                                    </div>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                )}
+                            </div>
+
+                            {selectedDayPosts.length > 0 && (
+                                <div className="border-t border-[var(--chronos-line)] p-3">
+                                    <button
+                                        type="button"
+                                        onClick={onCompose}
+                                        className="chronos-button chronos-button-soft w-full justify-center"
+                                    >
+                                        <Plus className="h-4 w-4" strokeWidth={1.75} />
+                                        Compose another
+                                    </button>
+                                </div>
+                            )}
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key="empty"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.25 }}
+                            className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center"
+                        >
+                            <p className="text-sm text-[var(--chronos-muted)]">
+                                Select a day to view posts.
+                            </p>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
         </div>
     );

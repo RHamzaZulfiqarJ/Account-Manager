@@ -1,7 +1,7 @@
 export const PLATFORM_RULES = {
   twitter: {
     label: "Twitter / X",
-    maxLength: 280,
+    maxLength: 500,
   },
   mastodon: {
     label: "Mastodon",

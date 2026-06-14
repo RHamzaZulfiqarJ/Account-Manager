@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, ReactNode, useEffect, useMemo, useState, type ElementType } from "react";
+import { FormEvent, useEffect, useMemo, useState, type ElementType, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import {
     Activity,
@@ -145,23 +145,19 @@ const formatPayload = (value: unknown) => {
 const getStatusClass = (status?: string | null) => {
     const value = status?.toUpperCase();
 
-    if (value === "APPROVED" || value === "SENT") {
-        return "border-[rgba(34,197,94,0.22)] bg-[rgba(34,197,94,0.08)] text-[var(--success)]";
+    if (value === "APPROVED" || value === "SENT" || value === "SUCCESS") {
+        return "border-[var(--chronos-olive)] text-[var(--chronos-olive-soft)]";
     }
 
-    if (value === "QUEUED" || value === "PROCESSING") {
-        return "border-[rgba(245,158,11,0.25)] bg-[rgba(245,158,11,0.08)] text-[var(--warning)]";
+    if (value === "QUEUED" || value === "PROCESSING" || value === "PENDING") {
+        return "border-[var(--chronos-olive-soft)] text-[var(--chronos-body)]";
     }
 
     if (value === "FAILED" || value === "REJECTED") {
-        return "border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.08)] text-red-300";
+        return "border-[var(--chronos-danger)] text-[var(--chronos-danger)]";
     }
 
-    if (value === "CANCELLED") {
-        return "border-[var(--border)] bg-[var(--surface-3)] text-[var(--text-muted)]";
-    }
-
-    return "border-[rgba(94,106,210,0.28)] bg-[rgba(94,106,210,0.09)] text-[var(--accent)]";
+    return "border-[var(--chronos-line-strong)] text-[var(--chronos-muted)]";
 };
 
 export default function WhatsAppDashboardPage() {
@@ -231,11 +227,13 @@ export default function WhatsAppDashboardPage() {
             accounts: accounts.length,
             contacts: contacts.length,
             templates: templates.length,
+            approved: approvedTemplates.length,
             queued: scheduledMessages.filter((message) => message.status === "QUEUED").length,
+            sent: scheduledMessages.filter((message) => message.status === "SENT").length,
             failed: scheduledMessages.filter((message) => message.status === "FAILED").length,
             logs: logs.length,
         };
-    }, [accounts, contacts, templates, scheduledMessages, logs]);
+    }, [accounts, contacts, templates, approvedTemplates, scheduledMessages, logs]);
 
     const showNotice = (type: Notice["type"], message: string) => {
         setNotice({ type, message });
@@ -247,6 +245,7 @@ export default function WhatsAppDashboardPage() {
 
     const loadAccounts = async () => {
         const data = await whatsappClient.listAccounts();
+
         setAccounts(data.accounts);
 
         if (data.accounts.length > 0 && !selectedAccountId) {
@@ -260,10 +259,10 @@ export default function WhatsAppDashboardPage() {
 
     const loadAccountData = async (accountId: string) => {
         const [contactsData, templatesData, scheduledData, logsData] = await Promise.all([
-            whatsappClient.listContacts(accountId, { limit: 20, q: searchContacts || undefined }),
-            whatsappClient.listTemplates(accountId, { limit: 50 }),
-            whatsappClient.listScheduledMessages(accountId, { limit: 20 }),
-            whatsappClient.listLogs(accountId, { limit: 20, q: searchLogs || undefined }),
+            whatsappClient.listContacts(accountId, { limit: 30, q: searchContacts || undefined }),
+            whatsappClient.listTemplates(accountId, { limit: 80 }),
+            whatsappClient.listScheduledMessages(accountId, { limit: 30 }),
+            whatsappClient.listLogs(accountId, { limit: 30, q: searchLogs || undefined }),
         ]);
 
         setContacts(contactsData.items);
@@ -295,6 +294,7 @@ export default function WhatsAppDashboardPage() {
         try {
             setActionLoading("refresh");
             await loadAccountData(selectedAccountId);
+            showNotice("success", "Workspace refreshed");
         } catch (error) {
             showNotice("error", getErrorMessage(error));
         } finally {
@@ -608,10 +608,12 @@ export default function WhatsAppDashboardPage() {
 
         try {
             setActionLoading("searchContacts");
+
             const data = await whatsappClient.listContacts(selectedAccountId, {
-                limit: 20,
+                limit: 30,
                 q: searchContacts || undefined,
             });
+
             setContacts(data.items);
         } catch (error) {
             showNotice("error", getErrorMessage(error));
@@ -629,10 +631,12 @@ export default function WhatsAppDashboardPage() {
 
         try {
             setActionLoading("searchLogs");
+
             const data = await whatsappClient.listLogs(selectedAccountId, {
-                limit: 20,
+                limit: 30,
                 q: searchLogs || undefined,
             });
+
             setLogs(data.items);
         } catch (error) {
             showNotice("error", getErrorMessage(error));
@@ -668,10 +672,10 @@ export default function WhatsAppDashboardPage() {
 
     if (loading) {
         return (
-            <div className="flex min-h-[70vh] items-center justify-center">
-                <div className="linear-card flex items-center gap-3 px-4 py-3">
-                    <Loader2 className="h-4 w-4 animate-spin text-[var(--accent)]" strokeWidth={1.5} />
-                    <span className="text-sm font-medium text-[var(--text-soft)]">Loading WhatsApp workspace</span>
+            <div className="flex min-h-[60vh] items-center justify-center">
+                <div className="chronos-panel flex items-center gap-3 px-5 py-4">
+                    <Loader2 className="h-4 w-4 animate-spin text-[var(--chronos-olive)]" strokeWidth={1.75} />
+                    <span className="chronos-label">Loading WhatsApp</span>
                 </div>
             </div>
         );
@@ -679,119 +683,101 @@ export default function WhatsAppDashboardPage() {
 
     return (
         <motion.div
-            initial={{ opacity: 0, y: 6 }}
+            initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-            className="space-y-5"
+            transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+            className="space-y-6"
         >
-            <div className="linear-panel overflow-hidden">
-                <div className="border-b border-[var(--border)] px-5 py-4">
-                    <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
-                        <div className="flex min-w-0 items-center gap-4">
-                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-[rgba(34,197,94,0.22)] bg-[rgba(34,197,94,0.08)] text-[var(--success)]">
-                                <MessageCircle className="h-6 w-6" strokeWidth={1.5} />
-                            </div>
+            <section className="chronos-panel overflow-hidden">
+                <div className="flex flex-col gap-5 border-b border-[var(--chronos-line)] p-5 xl:flex-row xl:items-center xl:justify-between">
+                    <div>
+                        <p className="chronos-label">WhatsApp Business</p>
+                        <h1 className="mt-2 text-3xl font-extralight tracking-[-0.07em] text-[var(--chronos-ink)] sm:text-4xl">
+                            Messaging workspace
+                        </h1>
+                        <p className="mt-2 text-sm text-[var(--chronos-muted)]">
+                            Accounts, contacts, templates, scheduled messages and logs.
+                        </p>
+                    </div>
 
-                            <div className="min-w-0">
-                                <div className="mb-2 flex items-center gap-2">
-                                    <span className="linear-badge border-[rgba(34,197,94,0.22)] bg-[rgba(34,197,94,0.08)] text-[var(--success)]">
-                                        WhatsApp Business
-                                    </span>
-                                    <span className="hidden text-xs text-[var(--text-muted)] sm:block">
-                                        Templates, contacts, sending, and logs
-                                    </span>
-                                </div>
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                        <select
+                            value={selectedAccountId}
+                            onChange={(event) => setSelectedAccountId(event.target.value)}
+                            className="h-11 min-w-full px-4 text-sm sm:min-w-[280px]"
+                        >
+                            <option value="">Select account</option>
+                            {accounts.map((account) => (
+                                <option key={account.id} value={account.id}>
+                                    {account.businessName || account.accountUsername}
+                                    {account.phoneNumberDisplay ? ` (${account.phoneNumberDisplay})` : ""}
+                                </option>
+                            ))}
+                        </select>
 
-                                <h1 className="linear-title text-2xl md:text-3xl">WhatsApp</h1>
+                        <button
+                            type="button"
+                            onClick={refreshSelectedAccountData}
+                            disabled={!selectedAccountId || actionLoading === "refresh"}
+                            className="chronos-button chronos-button-soft"
+                        >
+                            {actionLoading === "refresh" ? (
+                                <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
+                            ) : (
+                                <RefreshCw className="h-4 w-4" strokeWidth={1.75} />
+                            )}
+                            Refresh
+                        </button>
 
-                                <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-soft)]">
-                                    A simplified workspace for connecting a number, sending approved templates, and
-                                    tracking activity.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col gap-2 sm:flex-row">
-                            <select
-                                value={selectedAccountId}
-                                onChange={(event) => setSelectedAccountId(event.target.value)}
-                                className="linear-input h-9 min-w-[260px]"
-                            >
-                                <option value="">Select WhatsApp account</option>
-                                {accounts.map((account) => (
-                                    <option key={account.id} value={account.id}>
-                                        {account.businessName || account.accountUsername}{" "}
-                                        {account.phoneNumberDisplay ? `(${account.phoneNumberDisplay})` : ""}
-                                    </option>
-                                ))}
-                            </select>
-
-                            <button
-                                type="button"
-                                onClick={refreshSelectedAccountData}
-                                disabled={!selectedAccountId || actionLoading === "refresh"}
-                                className="linear-button-secondary h-9"
-                            >
-                                {actionLoading === "refresh" ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
-                                ) : (
-                                    <RefreshCw className="h-4 w-4" strokeWidth={1.5} />
-                                )}
-                                Refresh
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={handleDisconnectAccount}
-                                disabled={!selectedAccountId || actionLoading === "disconnect"}
-                                className="linear-button-danger h-9"
-                            >
-                                {actionLoading === "disconnect" ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
-                                ) : (
-                                    <Power className="h-4 w-4" strokeWidth={1.5} />
-                                )}
-                                Disconnect
-                            </button>
-                        </div>
+                        <button
+                            type="button"
+                            onClick={handleDisconnectAccount}
+                            disabled={!selectedAccountId || actionLoading === "disconnect"}
+                            className="chronos-button chronos-button-soft border-[var(--chronos-danger)] text-[var(--chronos-danger)] hover:bg-[var(--chronos-danger)] hover:text-[#090A0D]"
+                        >
+                            {actionLoading === "disconnect" ? (
+                                <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
+                            ) : (
+                                <Power className="h-4 w-4" strokeWidth={1.75} />
+                            )}
+                            Disconnect
+                        </button>
                     </div>
                 </div>
 
-                <div className="grid border-b border-[var(--border)] md:grid-cols-6">
-                    <HeaderMetric label="Accounts" value={stats.accounts} />
-                    <HeaderMetric label="Contacts" value={stats.contacts} />
-                    <HeaderMetric label="Templates" value={stats.templates} />
-                    <HeaderMetric label="Queued" value={stats.queued} />
-                    <HeaderMetric label="Failed" value={stats.failed} />
-                    <HeaderMetric label="Logs" value={stats.logs} />
+                <div className="grid gap-px bg-[var(--chronos-line)] sm:grid-cols-2 lg:grid-cols-7">
+                    <Metric label="Accounts" value={stats.accounts} icon={MessageCircle} />
+                    <Metric label="Contacts" value={stats.contacts} icon={Users} />
+                    <Metric label="Templates" value={stats.templates} icon={FileText} />
+                    <Metric label="Approved" value={stats.approved} icon={CheckCircle2} />
+                    <Metric label="Queued" value={stats.queued} icon={Clock} />
+                    <Metric label="Sent" value={stats.sent} icon={Send} />
+                    <Metric label="Failed" value={stats.failed} icon={AlertTriangle} danger={stats.failed > 0} />
                 </div>
 
                 {notice && (
                     <div
-                        className={`mx-5 my-4 flex items-center gap-3 rounded-md border px-3 py-2 text-sm font-medium ${
+                        className={`m-4 flex items-start gap-3 rounded-[20px] border p-4 text-sm ${
                             notice.type === "success"
-                                ? "border-[rgba(34,197,94,0.24)] bg-[rgba(34,197,94,0.08)] text-[var(--success)]"
-                                : "border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] text-red-300"
+                                ? "border-[var(--chronos-olive)]/40 bg-[var(--chronos-olive)]/8 text-[var(--chronos-body)]"
+                                : "border-[var(--chronos-danger)]/40 bg-[var(--chronos-danger)]/5 text-[var(--chronos-danger)]"
                         }`}
                     >
                         {notice.type === "success" ? (
-                            <CheckCircle2 className="h-4 w-4" strokeWidth={1.5} />
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} />
                         ) : (
-                            <XCircle className="h-4 w-4" strokeWidth={1.5} />
+                            <XCircle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} />
                         )}
                         {notice.message}
                     </div>
                 )}
-            </div>
+            </section>
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[360px_1fr]">
-                <div className="space-y-4">
-                    <div className="linear-card overflow-hidden">
-                        <SectionHeader title="Current Account" text="Selected WhatsApp Business number." />
-
+            <section className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
+                <aside className="space-y-4">
+                    <Panel title="Current account" label="Selected number">
                         {selectedAccount ? (
-                            <div className="space-y-3 p-4">
+                            <div className="space-y-3">
                                 <InfoLine label="Business" value={selectedAccount.businessName || "N/A"} />
                                 <InfoLine label="Username" value={selectedAccount.accountUsername} />
                                 <InfoLine label="WABA ID" value={selectedAccount.businessAccountId || "N/A"} />
@@ -799,19 +785,17 @@ export default function WhatsAppDashboardPage() {
                                 <InfoLine label="Display" value={selectedAccount.phoneNumberDisplay || "N/A"} />
                             </div>
                         ) : (
-                            <EmptyState title="No account selected" text="Connect or select a WhatsApp account." />
+                            <EmptyState title="No account selected" text="Select or connect a WhatsApp number." />
                         )}
-                    </div>
+                    </Panel>
 
-                    <div className="linear-card overflow-hidden">
-                        <SectionHeader title="Connect Number" text="Use Meta WhatsApp Business details." />
-
-                        <form onSubmit={handleConnectAccount} className="space-y-3 p-4">
+                    <Panel title="Connect number" label="Meta details">
+                        <form onSubmit={handleConnectAccount} className="space-y-3">
                             <Input
-                                label="Business Name"
+                                label="Business name"
                                 value={connectForm.businessName}
                                 onChange={(value) => setConnectForm((current) => ({ ...current, businessName: value }))}
-                                placeholder="Hamza Business"
+                                placeholder="MIMICO Business"
                                 required
                             />
 
@@ -857,634 +841,533 @@ export default function WhatsAppDashboardPage() {
                             <button
                                 type="submit"
                                 disabled={actionLoading === "connect"}
-                                className="linear-button-primary h-9 w-full"
+                                className="chronos-button w-full"
                             >
                                 {actionLoading === "connect" ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
+                                    <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
                                 ) : (
-                                    <Plus className="h-4 w-4" strokeWidth={1.5} />
+                                    <Plus className="h-4 w-4" strokeWidth={1.75} />
                                 )}
-                                Connect Account
+                                Connect
                             </button>
                         </form>
-                    </div>
-                </div>
+                    </Panel>
+                </aside>
 
-                <div className="linear-card overflow-hidden">
-                    <div className="border-b border-[var(--border)] bg-[var(--surface-hover)] p-2">
-                        <div className="flex flex-wrap gap-1">
-                            {tabs.map((tab) => {
-                                const Icon = tab.icon;
-                                const active = activeTab === tab.id;
+                <div className="chronos-panel overflow-hidden">
+                    <div className="flex flex-wrap gap-2 border-b border-[var(--chronos-line)] p-3">
+                        {tabs.map((tab) => {
+                            const Icon = tab.icon;
+                            const active = activeTab === tab.id;
 
-                                return (
-                                    <button
-                                        key={tab.id}
-                                        type="button"
-                                        onClick={() => setActiveTab(tab.id)}
-                                        className={`linear-tab ${active ? "border-[var(--border)] bg-[var(--surface-3)] text-[var(--text)]" : ""}`}
-                                        data-active={active}
-                                    >
-                                        <Icon className="h-4 w-4" strokeWidth={1.5} />
-                                        {tab.label}
-                                    </button>
-                                );
-                            })}
-                        </div>
+                            return (
+                                <button
+                                    key={tab.id}
+                                    type="button"
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`chronos-button h-10 ${active ? "" : "chronos-button-soft"}`}
+                                >
+                                    <Icon className="h-4 w-4" strokeWidth={1.75} />
+                                    {tab.label}
+                                </button>
+                            );
+                        })}
                     </div>
 
                     {activeTab === "send" && (
-                        <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-2">
-                            <form
-                                onSubmit={handleScheduleMessage}
-                                className="space-y-4 rounded-lg border border-[var(--border)] bg-[var(--canvas)] p-4"
-                            >
-                                <div>
-                                    <h3 className="text-sm font-semibold text-[var(--text)]">Send Template Message</h3>
-                                    <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
-                                        Use an approved template. Send now or schedule for later.
-                                    </p>
-                                </div>
+                        <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+                            <form onSubmit={handleScheduleMessage} className="chronos-panel p-4">
+                                <SectionTitle title="Send template message" text="Use approved templates only." />
 
-                                <Select
-                                    label="Contact"
-                                    value={scheduleForm.contactId}
-                                    onChange={handleContactSelectForSchedule}
-                                >
-                                    <option value="">Manual phone number</option>
-                                    {contacts.map((contact) => (
-                                        <option key={contact.id} value={contact.id}>
-                                            {contact.name} ({contact.phoneNumber})
-                                        </option>
-                                    ))}
-                                </Select>
-
-                                <Input
-                                    label="Recipient Phone"
-                                    value={scheduleForm.recipientPhone}
-                                    onChange={(value) =>
-                                        setScheduleForm((current) => ({ ...current, recipientPhone: value }))
-                                    }
-                                    placeholder="923001234567"
-                                    required
-                                />
-
-                                <Select
-                                    label="Approved Template"
-                                    value={selectedScheduleTemplate?.id || ""}
-                                    onChange={handleTemplateSelectForSchedule}
-                                    required
-                                >
-                                    <option value="">Select template</option>
-                                    {approvedTemplates.map((template) => (
-                                        <option key={template.id} value={template.id}>
-                                            {template.name} ({template.language})
-                                        </option>
-                                    ))}
-                                </Select>
-
-                                {selectedTemplateVariables.length > 0 && (
-                                    <div className="space-y-3">
-                                        <p className="text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">
-                                            Template Values
-                                        </p>
-
-                                        {selectedTemplateVariables.map((variable, index) => (
-                                            <Input
-                                                key={variable}
-                                                label={`Value {{${variable}}}`}
-                                                value={scheduleParamValues[index] || ""}
-                                                onChange={(value) => {
-                                                    setScheduleParamValues((current) => {
-                                                        const next = [...current];
-                                                        next[index] = value;
-                                                        return next;
-                                                    });
-                                                }}
-                                                placeholder={`Value for {{${variable}}}`}
-                                                required
-                                            />
+                                <div className="mt-4 space-y-3">
+                                    <Select
+                                        label="Contact"
+                                        value={scheduleForm.contactId}
+                                        onChange={handleContactSelectForSchedule}
+                                    >
+                                        <option value="">Manual phone number</option>
+                                        {contacts.map((contact) => (
+                                            <option key={contact.id} value={contact.id}>
+                                                {contact.name} ({contact.phoneNumber})
+                                            </option>
                                         ))}
+                                    </Select>
+
+                                    <Input
+                                        label="Recipient phone"
+                                        value={scheduleForm.recipientPhone}
+                                        onChange={(value) =>
+                                            setScheduleForm((current) => ({ ...current, recipientPhone: value }))
+                                        }
+                                        placeholder="923001234567"
+                                        required
+                                    />
+
+                                    <Select
+                                        label="Approved template"
+                                        value={selectedScheduleTemplate?.id || ""}
+                                        onChange={handleTemplateSelectForSchedule}
+                                        required
+                                    >
+                                        <option value="">Select template</option>
+                                        {approvedTemplates.map((template) => (
+                                            <option key={template.id} value={template.id}>
+                                                {template.name} ({template.language})
+                                            </option>
+                                        ))}
+                                    </Select>
+
+                                    {selectedTemplateVariables.length > 0 && (
+                                        <div className="space-y-3">
+                                            <p className="chronos-label">Template values</p>
+
+                                            {selectedTemplateVariables.map((variable, index) => (
+                                                <Input
+                                                    key={variable}
+                                                    label={`Value {{${variable}}}`}
+                                                    value={scheduleParamValues[index] || ""}
+                                                    onChange={(value) => {
+                                                        setScheduleParamValues((current) => {
+                                                            const next = [...current];
+                                                            next[index] = value;
+                                                            return next;
+                                                        });
+                                                    }}
+                                                    placeholder={`Value for {{${variable}}}`}
+                                                    required
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    <Input
+                                        label="Schedule time"
+                                        type="datetime-local"
+                                        value={scheduleForm.scheduledAt}
+                                        onChange={(value) =>
+                                            setScheduleForm((current) => ({ ...current, scheduledAt: value }))
+                                        }
+                                        min={getMinScheduleDateTime()}
+                                    />
+
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                        <button
+                                            type="button"
+                                            onClick={handleSendNowMessage}
+                                            disabled={actionLoading === "sendNow"}
+                                            className="chronos-button chronos-button-soft w-full"
+                                        >
+                                            {actionLoading === "sendNow" ? (
+                                                <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
+                                            ) : (
+                                                <Send className="h-4 w-4" strokeWidth={1.75} />
+                                            )}
+                                            Send now
+                                        </button>
+
+                                        <button
+                                            type="submit"
+                                            disabled={actionLoading === "schedule"}
+                                            className="chronos-button w-full"
+                                        >
+                                            {actionLoading === "schedule" ? (
+                                                <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
+                                            ) : (
+                                                <Clock className="h-4 w-4" strokeWidth={1.75} />
+                                            )}
+                                            Schedule
+                                        </button>
                                     </div>
-                                )}
-
-                                <Input
-                                    label="Schedule Time"
-                                    type="datetime-local"
-                                    value={scheduleForm.scheduledAt}
-                                    onChange={(value) =>
-                                        setScheduleForm((current) => ({ ...current, scheduledAt: value }))
-                                    }
-                                    min={getMinScheduleDateTime()}
-                                />
-
-                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                    <button
-                                        type="button"
-                                        onClick={handleSendNowMessage}
-                                        disabled={!selectedAccountId || actionLoading === "sendNow"}
-                                        className="linear-button-primary h-9"
-                                    >
-                                        {actionLoading === "sendNow" ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
-                                        ) : (
-                                            <Send className="h-4 w-4" strokeWidth={1.5} />
-                                        )}
-                                        Send Now
-                                    </button>
-
-                                    <button
-                                        type="submit"
-                                        disabled={!selectedAccountId || actionLoading === "schedule"}
-                                        className="linear-button-secondary h-9"
-                                    >
-                                        {actionLoading === "schedule" ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
-                                        ) : (
-                                            <Clock className="h-4 w-4" strokeWidth={1.5} />
-                                        )}
-                                        Schedule
-                                    </button>
                                 </div>
                             </form>
 
-                            <div className="rounded-lg border border-[var(--border)] bg-[var(--canvas)] p-4">
-                                <h3 className="text-sm font-semibold text-[var(--text)]">Preview</h3>
-
-                                <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
-                                    The final body after replacing template variables.
-                                </p>
-
-                                <div className="mt-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
-                                    <div className="mb-3 flex items-center gap-2">
-                                        <MessageCircle className="h-4 w-4 text-[var(--success)]" strokeWidth={1.5} />
-                                        <span className="text-xs font-medium text-[var(--text-muted)]">
-                                            WhatsApp message
-                                        </span>
+                            <Panel title="Message preview" label="Template output">
+                                {schedulePreview ? (
+                                    <div className="rounded-[20px] border border-[var(--chronos-line)] bg-[var(--chronos-olive)]/5 p-4">
+                                        <p className="whitespace-pre-wrap text-sm leading-7 text-[var(--chronos-body)]">
+                                            {schedulePreview}
+                                        </p>
                                     </div>
-
-                                    <p className="whitespace-pre-wrap text-sm leading-6 text-[var(--text-soft)]">
-                                        {schedulePreview || "Select an approved template to preview the message."}
-                                    </p>
-                                </div>
-
-                                <div className="mt-4 rounded-lg border border-[rgba(245,158,11,0.25)] bg-[rgba(245,158,11,0.08)] p-3">
-                                    <p className="text-sm font-medium text-[var(--warning)]">Template rule</p>
-                                    <p className="mt-1 text-xs leading-5 text-[var(--text-soft)]">
-                                        WhatsApp Business requires approved templates for business-initiated messages.
-                                    </p>
-                                </div>
-                            </div>
+                                ) : (
+                                    <EmptyState
+                                        title="No preview"
+                                        text="Select a template to preview message content."
+                                    />
+                                )}
+                            </Panel>
                         </div>
                     )}
 
                     {activeTab === "contacts" && (
-                        <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-[320px_1fr]">
-                            <form
-                                onSubmit={handleCreateContact}
-                                className="space-y-4 rounded-lg border border-[var(--border)] bg-[var(--canvas)] p-4"
-                            >
-                                <h3 className="text-sm font-semibold text-[var(--text)]">Add Contact</h3>
+                        <div className="grid gap-4 p-4 xl:grid-cols-[340px_minmax(0,1fr)]">
+                            <form onSubmit={handleCreateContact} className="chronos-panel p-4">
+                                <SectionTitle title="Add contact" text="Save reusable recipients." />
 
-                                <Input
-                                    label="Name"
-                                    value={contactForm.name}
-                                    onChange={(value) => setContactForm((current) => ({ ...current, name: value }))}
-                                    placeholder="Ali Customer"
-                                    required
-                                />
+                                <div className="mt-4 space-y-3">
+                                    <Input
+                                        label="Name"
+                                        value={contactForm.name}
+                                        onChange={(value) => setContactForm((current) => ({ ...current, name: value }))}
+                                        placeholder="Customer name"
+                                        required
+                                    />
 
-                                <Input
-                                    label="Phone Number"
-                                    value={contactForm.phoneNumber}
-                                    onChange={(value) =>
-                                        setContactForm((current) => ({ ...current, phoneNumber: value }))
-                                    }
-                                    placeholder="923001234567"
-                                    required
-                                />
+                                    <Input
+                                        label="Phone number"
+                                        value={contactForm.phoneNumber}
+                                        onChange={(value) =>
+                                            setContactForm((current) => ({ ...current, phoneNumber: value }))
+                                        }
+                                        placeholder="923001234567"
+                                        required
+                                    />
 
-                                <button
-                                    type="submit"
-                                    disabled={!selectedAccountId || actionLoading === "contact"}
-                                    className="linear-button-primary h-9 w-full"
-                                >
-                                    {actionLoading === "contact" ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
-                                    ) : (
-                                        <Plus className="h-4 w-4" strokeWidth={1.5} />
-                                    )}
-                                    Add Contact
-                                </button>
+                                    <button
+                                        type="submit"
+                                        disabled={actionLoading === "contact"}
+                                        className="chronos-button w-full"
+                                    >
+                                        {actionLoading === "contact" ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
+                                        ) : (
+                                            <Plus className="h-4 w-4" strokeWidth={1.75} />
+                                        )}
+                                        Add contact
+                                    </button>
+                                </div>
                             </form>
 
-                            <div className="rounded-lg border border-[var(--border)] bg-[var(--canvas)]">
-                                <div className="flex flex-col justify-between gap-3 border-b border-[var(--border)] p-4 md:flex-row md:items-center">
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-[var(--text)]">Contacts</h3>
-                                        <p className="mt-1 text-xs text-[var(--text-muted)]">
-                                            {contacts.length} saved contact(s)
-                                        </p>
-                                    </div>
-
+                            <Panel
+                                title="Contacts"
+                                label={`${contacts.length} saved`}
+                                action={
                                     <form onSubmit={handleContactSearch} className="flex gap-2">
                                         <input
                                             value={searchContacts}
                                             onChange={(event) => setSearchContacts(event.target.value)}
-                                            placeholder="Search contacts"
-                                            className="linear-input h-9"
+                                            placeholder="Search"
+                                            className="h-10 w-40 px-4 text-sm"
                                         />
 
-                                        <button type="submit" className="linear-button-secondary h-9 w-9 p-0">
-                                            <Search className="h-4 w-4" strokeWidth={1.5} />
+                                        <button type="submit" className="chronos-button h-10 w-10 px-0">
+                                            <Search className="h-4 w-4" strokeWidth={1.75} />
                                         </button>
                                     </form>
-                                </div>
+                                }
+                            >
+                                {contacts.length === 0 ? (
+                                    <EmptyState title="No contacts" text="Add contacts to reuse them while sending." />
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full min-w-[560px] text-left">
+                                            <thead className="border-b border-[var(--chronos-line)] text-xs uppercase tracking-[0.14em] text-[var(--chronos-muted)]">
+                                                <tr>
+                                                    <th className="px-4 py-3 font-medium">Name</th>
+                                                    <th className="px-4 py-3 font-medium">Phone</th>
+                                                    <th className="px-4 py-3 text-right font-medium">Action</th>
+                                                </tr>
+                                            </thead>
 
-                                <div className="divide-y divide-[var(--border)]">
-                                    {contacts.length === 0 ? (
-                                        <EmptyState
-                                            title="No contacts found"
-                                            text="Add contacts manually to reuse them while sending templates."
-                                        />
-                                    ) : (
-                                        contacts.map((contact) => (
-                                            <div
-                                                key={contact.id}
-                                                className="flex flex-col justify-between gap-3 p-4 transition-colors hover:bg-[var(--surface-hover)] sm:flex-row sm:items-center"
-                                            >
-                                                <div>
-                                                    <h4 className="text-sm font-semibold text-[var(--text)]">
-                                                        {contact.name}
-                                                    </h4>
-                                                    <p className="mt-1 text-sm text-[var(--text-muted)]">
-                                                        {contact.phoneNumber}
-                                                    </p>
-                                                    {contact.isBlocked && (
-                                                        <span className="linear-badge mt-2 border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.08)] text-red-300">
-                                                            Blocked
-                                                        </span>
-                                                    )}
-                                                </div>
-
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleDeleteContact(contact.id)}
-                                                    disabled={actionLoading === contact.id}
-                                                    className="linear-button-danger h-8 px-3 text-xs"
-                                                >
-                                                    {actionLoading === contact.id ? (
-                                                        <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
-                                                    ) : (
-                                                        <Trash2 className="h-4 w-4" strokeWidth={1.5} />
-                                                    )}
-                                                    Delete
-                                                </button>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
+                                            <tbody className="divide-y divide-[var(--chronos-line)]">
+                                                {contacts.map((contact) => (
+                                                    <tr
+                                                        key={contact.id}
+                                                        className="transition hover:bg-[var(--chronos-olive)]/5"
+                                                    >
+                                                        <td className="px-4 py-3 text-sm font-medium text-[var(--chronos-ink)]">
+                                                            {contact.name}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm text-[var(--chronos-muted)]">
+                                                            {contact.phoneNumber}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleDeleteContact(contact.id)}
+                                                                disabled={actionLoading === contact.id}
+                                                                className="chronos-button chronos-button-soft h-9 border-[var(--chronos-danger)] text-[var(--chronos-danger)] hover:bg-[var(--chronos-danger)] hover:text-[#090A0D]"
+                                                            >
+                                                                {actionLoading === contact.id ? (
+                                                                    <Loader2
+                                                                        className="h-4 w-4 animate-spin"
+                                                                        strokeWidth={1.75}
+                                                                    />
+                                                                ) : (
+                                                                    <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+                                                                )}
+                                                                Delete
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </Panel>
                         </div>
                     )}
 
                     {activeTab === "templates" && (
-                        <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-[360px_1fr]">
-                            <form
-                                onSubmit={handleCreateTemplate}
-                                className="space-y-4 rounded-lg border border-[var(--border)] bg-[var(--canvas)] p-4"
-                            >
-                                <div>
-                                    <h3 className="text-sm font-semibold text-[var(--text)]">Create Template</h3>
-                                    <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
-                                        Submit a simple template to Meta for approval.
-                                    </p>
-                                </div>
+                        <div className="grid gap-4 p-4 xl:grid-cols-[380px_minmax(0,1fr)]">
+                            <form onSubmit={handleCreateTemplate} className="chronos-panel p-4">
+                                <SectionTitle title="Create template" text="Submit template to Meta for approval." />
 
-                                <Input
-                                    label="Template Name"
-                                    value={templateForm.name}
-                                    onChange={(value) => setTemplateForm((current) => ({ ...current, name: value }))}
-                                    placeholder="order_update"
-                                    required
-                                />
+                                <div className="mt-4 space-y-3">
+                                    <Input
+                                        label="Template name"
+                                        value={templateForm.name}
+                                        onChange={(value) =>
+                                            setTemplateForm((current) => ({ ...current, name: value }))
+                                        }
+                                        placeholder="order_update"
+                                        required
+                                    />
 
-                                <Select
-                                    label="Category"
-                                    value={templateForm.category}
-                                    onChange={(value) =>
-                                        setTemplateForm((current) => ({
-                                            ...current,
-                                            category: value as WhatsAppTemplateCategory,
-                                        }))
-                                    }
-                                    required
-                                >
-                                    <option value="UTILITY">Utility</option>
-                                    <option value="MARKETING">Marketing</option>
-                                    <option value="AUTHENTICATION">Authentication</option>
-                                </Select>
+                                    <Select
+                                        label="Category"
+                                        value={templateForm.category}
+                                        onChange={(value) =>
+                                            setTemplateForm((current) => ({
+                                                ...current,
+                                                category: value as WhatsAppTemplateCategory,
+                                            }))
+                                        }
+                                        required
+                                    >
+                                        <option value="UTILITY">Utility</option>
+                                        <option value="MARKETING">Marketing</option>
+                                        <option value="AUTHENTICATION">Authentication</option>
+                                    </Select>
 
-                                <Input
-                                    label="Language"
-                                    value={templateForm.language}
-                                    onChange={(value) =>
-                                        setTemplateForm((current) => ({ ...current, language: value }))
-                                    }
-                                    placeholder="en_US"
-                                    required
-                                />
+                                    <Input
+                                        label="Language"
+                                        value={templateForm.language}
+                                        onChange={(value) =>
+                                            setTemplateForm((current) => ({ ...current, language: value }))
+                                        }
+                                        placeholder="en_US"
+                                        required
+                                    />
 
-                                <Input
-                                    label="Header Text"
-                                    value={templateForm.headerText}
-                                    onChange={(value) =>
-                                        setTemplateForm((current) => ({ ...current, headerText: value }))
-                                    }
-                                    placeholder="Optional header"
-                                />
+                                    <Input
+                                        label="Header text"
+                                        value={templateForm.headerText}
+                                        onChange={(value) =>
+                                            setTemplateForm((current) => ({ ...current, headerText: value }))
+                                        }
+                                        placeholder="Optional header"
+                                    />
 
-                                <Textarea
-                                    label="Body Text"
-                                    value={templateForm.bodyText}
-                                    onChange={(value) =>
-                                        setTemplateForm((current) => ({ ...current, bodyText: value }))
-                                    }
-                                    placeholder="Hello {{1}}, your order {{2}} is ready."
-                                    rows={5}
-                                    required
-                                />
+                                    <Textarea
+                                        label="Body text"
+                                        value={templateForm.bodyText}
+                                        onChange={(value) =>
+                                            setTemplateForm((current) => ({ ...current, bodyText: value }))
+                                        }
+                                        placeholder="Hello {{1}}, your order {{2}} is ready."
+                                        rows={5}
+                                        required
+                                    />
 
-                                <Input
-                                    label="Footer Text"
-                                    value={templateForm.footerText}
-                                    onChange={(value) =>
-                                        setTemplateForm((current) => ({ ...current, footerText: value }))
-                                    }
-                                    placeholder="Optional footer"
-                                />
+                                    <Input
+                                        label="Footer text"
+                                        value={templateForm.footerText}
+                                        onChange={(value) =>
+                                            setTemplateForm((current) => ({ ...current, footerText: value }))
+                                        }
+                                        placeholder="Optional footer"
+                                    />
 
-                                {createTemplateVariables.length > 0 && (
-                                    <div className="space-y-3">
-                                        <p className="text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">
-                                            Example Values
-                                        </p>
+                                    {createTemplateVariables.length > 0 && (
+                                        <div className="space-y-3">
+                                            <p className="chronos-label">Example values</p>
 
-                                        {createTemplateVariables.map((variable, index) => (
-                                            <Input
-                                                key={variable}
-                                                label={`Example {{${variable}}}`}
-                                                value={templateExampleValues[index] || ""}
-                                                onChange={(value) => {
-                                                    setTemplateExampleValues((current) => {
-                                                        const next = [...current];
-                                                        next[index] = value;
-                                                        return next;
-                                                    });
-                                                }}
-                                                placeholder={`Example for {{${variable}}}`}
-                                                required
-                                            />
-                                        ))}
-                                    </div>
-                                )}
-
-                                {templateForm.bodyText && (
-                                    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
-                                        <p className="mb-2 text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">
-                                            Preview
-                                        </p>
-                                        <p className="whitespace-pre-wrap text-sm leading-6 text-[var(--text-soft)]">
-                                            {createTemplatePreview}
-                                        </p>
-                                    </div>
-                                )}
-
-                                <button
-                                    type="submit"
-                                    disabled={!selectedAccountId || actionLoading === "createTemplate"}
-                                    className="linear-button-primary h-9 w-full"
-                                >
-                                    {actionLoading === "createTemplate" ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
-                                    ) : (
-                                        <Plus className="h-4 w-4" strokeWidth={1.5} />
+                                            {createTemplateVariables.map((variable, index) => (
+                                                <Input
+                                                    key={variable}
+                                                    label={`Example {{${variable}}}`}
+                                                    value={templateExampleValues[index] || ""}
+                                                    onChange={(value) => {
+                                                        setTemplateExampleValues((current) => {
+                                                            const next = [...current];
+                                                            next[index] = value;
+                                                            return next;
+                                                        });
+                                                    }}
+                                                    placeholder={`Example for {{${variable}}}`}
+                                                    required
+                                                />
+                                            ))}
+                                        </div>
                                     )}
-                                    Create Template
-                                </button>
+
+                                    {templateForm.bodyText && (
+                                        <div className="rounded-[20px] border border-[var(--chronos-line)] bg-[var(--chronos-olive)]/5 p-4">
+                                            <p className="chronos-label mb-2">Preview</p>
+                                            <p className="whitespace-pre-wrap text-sm leading-7 text-[var(--chronos-muted)]">
+                                                {createTemplatePreview || templateForm.bodyText}
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    <button
+                                        type="submit"
+                                        disabled={actionLoading === "createTemplate"}
+                                        className="chronos-button w-full"
+                                    >
+                                        {actionLoading === "createTemplate" ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
+                                        ) : (
+                                            <Plus className="h-4 w-4" strokeWidth={1.75} />
+                                        )}
+                                        Create template
+                                    </button>
+                                </div>
                             </form>
 
-                            <div className="rounded-lg border border-[var(--border)] bg-[var(--canvas)]">
-                                <div className="flex flex-col justify-between gap-3 border-b border-[var(--border)] p-4 md:flex-row md:items-center">
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-[var(--text)]">Templates</h3>
-                                        <p className="mt-1 text-xs text-[var(--text-muted)]">
-                                            Sync from Meta after approval or rejection.
-                                        </p>
-                                    </div>
-
+                            <Panel
+                                title="Templates"
+                                label={`${templates.length} total`}
+                                action={
                                     <button
                                         type="button"
                                         onClick={handleSyncTemplates}
                                         disabled={!selectedAccountId || actionLoading === "syncTemplates"}
-                                        className="linear-button-secondary h-9"
+                                        className="chronos-button chronos-button-soft"
                                     >
                                         {actionLoading === "syncTemplates" ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
+                                            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
                                         ) : (
-                                            <RefreshCw className="h-4 w-4" strokeWidth={1.5} />
+                                            <RefreshCw className="h-4 w-4" strokeWidth={1.75} />
                                         )}
                                         Sync
                                     </button>
-                                </div>
+                                }
+                            >
+                                {templates.length === 0 ? (
+                                    <EmptyState title="No templates" text="Create or sync templates from Meta." />
+                                ) : (
+                                    <div className="divide-y divide-[var(--chronos-line)]">
+                                        {templates.map((template) => {
+                                            const bodyText = extractBodyTextFromComponents(template.components);
 
-                                <div className="divide-y divide-[var(--border)]">
-                                    {templates.length === 0 ? (
-                                        <EmptyState
-                                            title="No templates found"
-                                            text="Create or sync templates from Meta."
-                                        />
-                                    ) : (
-                                        templates.map((template) => (
-                                            <div
-                                                key={template.id}
-                                                className="p-4 transition-colors hover:bg-[var(--surface-hover)]"
-                                            >
-                                                <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
-                                                    <div className="min-w-0">
-                                                        <h4 className="truncate text-sm font-semibold text-[var(--text)]">
-                                                            {template.name}
-                                                        </h4>
-                                                        <p className="mt-1 text-xs text-[var(--text-muted)]">
-                                                            {template.language}{" "}
-                                                            {template.category ? `• ${template.category}` : ""}
-                                                        </p>
+                                            return (
+                                                <div
+                                                    key={template.id}
+                                                    className="p-4 transition hover:bg-[var(--chronos-olive)]/5"
+                                                >
+                                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                                        <div>
+                                                            <p className="text-sm font-medium text-[var(--chronos-ink)]">
+                                                                {template.name}
+                                                            </p>
+                                                            <p className="mt-1 text-xs text-[var(--chronos-muted)]">
+                                                                {template.language} ·{" "}
+                                                                {template.category || "No category"}
+                                                            </p>
+                                                        </div>
+
+                                                        <span
+                                                            className={`chronos-pill ${getStatusClass(template.status)}`}
+                                                        >
+                                                            {template.status || "Unknown"}
+                                                        </span>
                                                     </div>
 
-                                                    <span
-                                                        className={`linear-badge uppercase ${getStatusClass(template.status)}`}
-                                                    >
-                                                        {template.status || "UNKNOWN"}
-                                                    </span>
+                                                    {bodyText && (
+                                                        <p className="mt-3 line-clamp-2 text-sm leading-6 text-[var(--chronos-muted)]">
+                                                            {bodyText}
+                                                        </p>
+                                                    )}
                                                 </div>
-
-                                                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[var(--text-soft)]">
-                                                    {extractBodyTextFromComponents(template.components) ||
-                                                        "No body text available"}
-                                                </p>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </Panel>
                         </div>
                     )}
 
                     {activeTab === "activity" && (
-                        <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-2">
-                            <div className="rounded-lg border border-[var(--border)] bg-[var(--canvas)]">
-                                <SectionHeader
-                                    title="Scheduled Messages"
-                                    text="Queued, sent, cancelled, and failed template messages."
-                                />
-
-                                <div className="divide-y divide-[var(--border)]">
-                                    {scheduledMessages.length === 0 ? (
-                                        <EmptyState
-                                            title="No scheduled messages"
-                                            text="Send or schedule a template message to see it here."
-                                        />
-                                    ) : (
-                                        scheduledMessages.map((message) => (
-                                            <div
+                        <div className="grid gap-4 p-4 xl:grid-cols-2">
+                            <Panel title="Scheduled messages" label={`${scheduledMessages.length} records`}>
+                                {scheduledMessages.length === 0 ? (
+                                    <EmptyState title="No messages" text="Scheduled and sent messages appear here." />
+                                ) : (
+                                    <div className="divide-y divide-[var(--chronos-line)]">
+                                        {scheduledMessages.map((message) => (
+                                            <MessageRow
                                                 key={message.id}
-                                                className="space-y-3 p-4 transition-colors hover:bg-[var(--surface-hover)]"
-                                            >
-                                                <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
-                                                    <div>
-                                                        <h4 className="text-sm font-semibold text-[var(--text)]">
-                                                            {message.templateName || "Template message"}
-                                                        </h4>
-                                                        <p className="mt-1 text-sm text-[var(--text-muted)]">
-                                                            To {message.recipientPhone}
-                                                        </p>
-                                                        <p className="mt-1 text-xs text-[var(--text-muted)]">
-                                                            Scheduled {formatDate(message.scheduledAt)}
-                                                        </p>
-                                                        {message.sentAt && (
-                                                            <p className="mt-1 text-xs text-[var(--text-muted)]">
-                                                                Sent {formatDate(message.sentAt)}
-                                                            </p>
-                                                        )}
-                                                    </div>
-
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <span
-                                                            className={`linear-badge uppercase ${getStatusClass(message.status)}`}
-                                                        >
-                                                            {message.status}
-                                                        </span>
-
-                                                        {(message.status === "QUEUED" ||
-                                                            message.status === "FAILED" ||
-                                                            message.status === "DRAFT") && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleCancelMessage(message.id)}
-                                                                disabled={actionLoading === message.id}
-                                                                className="linear-button-danger h-8 px-3 text-xs"
-                                                            >
-                                                                Cancel
-                                                            </button>
-                                                        )}
-
-                                                        {message.status === "FAILED" && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleRetryMessage(message.id)}
-                                                                disabled={actionLoading === message.id}
-                                                                className="linear-button-secondary h-8 px-3 text-xs"
-                                                            >
-                                                                Retry
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {message.errorMessage && (
-                                                    <div className="rounded-md border border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.08)] p-3 text-sm leading-6 text-red-200">
-                                                        {message.errorMessage}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="rounded-lg border border-[var(--border)] bg-[var(--canvas)]">
-                                <div className="flex flex-col justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface-hover)] p-4 md:flex-row md:items-center">
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-[var(--text)]">Message Logs</h3>
-                                        <p className="mt-1 text-xs text-[var(--text-muted)]">
-                                            API responses, errors, and webhook logs.
-                                        </p>
+                                                message={message}
+                                                actionLoading={actionLoading}
+                                                onCancel={() => handleCancelMessage(message.id)}
+                                                onRetry={() => handleRetryMessage(message.id)}
+                                            />
+                                        ))}
                                     </div>
+                                )}
+                            </Panel>
 
+                            <Panel
+                                title="Message logs"
+                                label={`${logs.length} logs`}
+                                action={
                                     <form onSubmit={handleLogSearch} className="flex gap-2">
                                         <input
                                             value={searchLogs}
                                             onChange={(event) => setSearchLogs(event.target.value)}
-                                            placeholder="Search logs"
-                                            className="linear-input h-9"
+                                            placeholder="Search"
+                                            className="h-10 w-40 px-4 text-sm"
                                         />
 
-                                        <button type="submit" className="linear-button-secondary h-9 w-9 p-0">
-                                            <Search className="h-4 w-4" strokeWidth={1.5} />
+                                        <button type="submit" className="chronos-button h-10 w-10 px-0">
+                                            <Search className="h-4 w-4" strokeWidth={1.75} />
                                         </button>
                                     </form>
-                                </div>
-
-                                <div className="divide-y divide-[var(--border)]">
-                                    {logs.length === 0 ? (
-                                        <EmptyState
-                                            title="No logs found"
-                                            text="Logs appear after sends, webhook updates, or failures."
-                                        />
-                                    ) : (
-                                        logs.map((log) => (
+                                }
+                            >
+                                {logs.length === 0 ? (
+                                    <EmptyState
+                                        title="No logs"
+                                        text="Logs appear after sends, webhooks and failures."
+                                    />
+                                ) : (
+                                    <div className="divide-y divide-[var(--chronos-line)]">
+                                        {logs.map((log) => (
                                             <details key={log.id} className="group">
-                                                <summary className="list-none p-4 transition-colors hover:bg-[var(--surface-hover)]">
-                                                    <div className="flex cursor-pointer flex-col justify-between gap-3 sm:flex-row sm:items-start">
+                                                <summary className="list-none p-4 transition hover:bg-[var(--chronos-olive)]/5">
+                                                    <div className="flex cursor-pointer flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                                         <div>
                                                             <div className="flex items-center gap-2">
-                                                                <h4 className="text-sm font-semibold text-[var(--text)]">
+                                                                <p className="text-sm font-medium text-[var(--chronos-ink)]">
                                                                     {log.direction}
-                                                                </h4>
+                                                                </p>
+
                                                                 {log.success ? (
                                                                     <CheckCircle2
-                                                                        className="h-4 w-4 text-[var(--success)]"
-                                                                        strokeWidth={1.5}
+                                                                        className="h-4 w-4 text-[var(--chronos-olive)]"
+                                                                        strokeWidth={1.75}
                                                                     />
                                                                 ) : (
                                                                     <XCircle
-                                                                        className="h-4 w-4 text-red-300"
-                                                                        strokeWidth={1.5}
+                                                                        className="h-4 w-4 text-[var(--chronos-danger)]"
+                                                                        strokeWidth={1.75}
                                                                     />
                                                                 )}
                                                             </div>
 
-                                                            <p className="mt-1 text-sm text-[var(--text-muted)]">
+                                                            <p className="mt-1 text-sm text-[var(--chronos-muted)]">
                                                                 {log.recipientPhone || "No recipient"}
                                                             </p>
 
-                                                            <p className="mt-1 text-xs text-[var(--text-muted)]">
+                                                            <p className="mt-1 text-xs text-[var(--chronos-muted)]">
                                                                 {formatDate(log.createdAt)}
                                                             </p>
                                                         </div>
 
                                                         <span
-                                                            className={`linear-badge uppercase ${log.success ? "border-[rgba(34,197,94,0.22)] bg-[rgba(34,197,94,0.08)] text-[var(--success)]" : "border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.08)] text-red-300"}`}
+                                                            className={`chronos-pill ${log.success ? getStatusClass("SUCCESS") : getStatusClass("FAILED")}`}
                                                         >
                                                             {log.success ? "Success" : "Failed"}
                                                         </span>
@@ -1493,69 +1376,94 @@ export default function WhatsAppDashboardPage() {
 
                                                 <div className="px-4 pb-4">
                                                     {log.errorMessage && (
-                                                        <div className="mb-3 rounded-md border border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.08)] p-3 text-sm text-red-200">
+                                                        <div className="mb-3 rounded-[18px] border border-[var(--chronos-danger)]/40 bg-[var(--chronos-danger)]/5 p-3 text-sm text-[var(--chronos-danger)]">
                                                             {log.errorMessage}
                                                         </div>
                                                     )}
 
-                                                    <pre className="custom-scrollbar max-h-72 overflow-auto rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 text-xs leading-5 text-[var(--text-soft)]">
-                                                        {formatPayload({
-                                                            payload: log.payload,
-                                                            response: log.response,
-                                                            scheduledMessage: log.scheduledMessage,
-                                                        })}
-                                                    </pre>
+                                                    <PayloadBlock title="Payload" value={log.payload} />
+                                                    <PayloadBlock title="Response" value={log.response} />
                                                 </div>
                                             </details>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </Panel>
                         </div>
                     )}
                 </div>
-            </div>
+            </section>
         </motion.div>
     );
 }
 
-function HeaderMetric({ label, value }: { label: string; value: number }) {
+function Metric({
+    label,
+    value,
+    icon: Icon,
+    danger,
+}: {
+    label: string;
+    value: number;
+    icon: ElementType;
+    danger?: boolean;
+}) {
     return (
-        <div className="border-r border-[var(--border)] px-5 py-4 last:border-r-0">
-            <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">{label}</p>
-            <p className="mt-1 text-2xl font-semibold tracking-[-0.04em] text-[var(--text)]">{value}</p>
+        <div className="bg-[var(--chronos-sheet)]/70 p-4">
+            <div className="mb-4 flex items-center justify-between gap-3">
+                <p className="chronos-label">{label}</p>
+                <Icon
+                    className={`h-4 w-4 ${danger ? "text-[var(--chronos-danger)]" : "text-[var(--chronos-olive)]"}`}
+                    strokeWidth={1.75}
+                />
+            </div>
+
+            <p className="text-3xl font-extralight tracking-[-0.07em] text-[var(--chronos-ink)]">{value}</p>
         </div>
     );
 }
 
-function SectionHeader({ title, text }: { title: string; text: string }) {
+function Panel({
+    title,
+    label,
+    action,
+    children,
+}: {
+    title: string;
+    label?: string;
+    action?: ReactNode;
+    children: ReactNode;
+}) {
     return (
-        <div className="border-b border-[var(--border)] bg-[var(--surface-hover)] px-4 py-3">
-            <h2 className="text-sm font-semibold text-[var(--text)]">{title}</h2>
-            <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">{text}</p>
+        <div className="chronos-panel overflow-hidden">
+            <div className="flex flex-col gap-3 border-b border-[var(--chronos-line)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    {label && <p className="chronos-label">{label}</p>}
+                    <h2 className="mt-1 text-xl font-light tracking-[-0.05em] text-[var(--chronos-ink)]">{title}</h2>
+                </div>
+
+                {action}
+            </div>
+
+            <div className="p-4">{children}</div>
+        </div>
+    );
+}
+
+function SectionTitle({ title, text }: { title: string; text: string }) {
+    return (
+        <div>
+            <p className="chronos-label">{title}</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--chronos-muted)]">{text}</p>
         </div>
     );
 }
 
 function InfoLine({ label, value }: { label: string; value: string }) {
     return (
-        <div className="rounded-md border border-[var(--border)] bg-[var(--canvas)] p-3">
-            <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">{label}</p>
-            <p className="mt-1 break-all text-sm font-medium text-[var(--text)]">{value}</p>
-        </div>
-    );
-}
-
-function EmptyState({ title, text }: { title: string; text: string }) {
-    return (
-        <div className="px-6 py-12 text-center">
-            <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--canvas)] text-[var(--text-muted)]">
-                <MessageCircle className="h-5 w-5" strokeWidth={1.5} />
-            </div>
-
-            <h3 className="text-sm font-semibold text-[var(--text)]">{title}</h3>
-
-            <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-[var(--text-muted)]">{text}</p>
+        <div className="flex items-center justify-between gap-4 border-b border-[var(--chronos-line)] pb-3 last:border-b-0 last:pb-0">
+            <span className="text-xs uppercase tracking-[0.14em] text-[var(--chronos-muted)]">{label}</span>
+            <span className="max-w-[170px] truncate text-right text-sm text-[var(--chronos-ink)]">{value}</span>
         </div>
     );
 }
@@ -1566,7 +1474,7 @@ function Input({
     onChange,
     placeholder,
     type = "text",
-    required = false,
+    required,
     min,
 }: {
     label: string;
@@ -1578,17 +1486,16 @@ function Input({
     min?: string;
 }) {
     return (
-        <label className="block">
-            <span className="mb-2 block text-xs font-medium text-[var(--text-soft)]">{label}</span>
-
+        <label className="block space-y-2">
+            <span className="chronos-label">{label}</span>
             <input
                 type={type}
                 value={value}
+                min={min}
                 onChange={(event) => onChange(event.target.value)}
                 placeholder={placeholder}
                 required={required}
-                min={min}
-                className="linear-input"
+                className="h-11 w-full px-4 text-sm"
             />
         </label>
     );
@@ -1599,8 +1506,8 @@ function Textarea({
     value,
     onChange,
     placeholder,
-    rows = 3,
-    required = false,
+    rows = 4,
+    required,
 }: {
     label: string;
     value: string;
@@ -1610,16 +1517,15 @@ function Textarea({
     required?: boolean;
 }) {
     return (
-        <label className="block">
-            <span className="mb-2 block text-xs font-medium text-[var(--text-soft)]">{label}</span>
-
+        <label className="block space-y-2">
+            <span className="chronos-label">{label}</span>
             <textarea
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
                 placeholder={placeholder}
                 rows={rows}
                 required={required}
-                className="linear-input resize-none"
+                className="w-full resize-none p-4 text-sm leading-7"
             />
         </label>
     );
@@ -1630,7 +1536,7 @@ function Select({
     value,
     onChange,
     children,
-    required = false,
+    required,
 }: {
     label: string;
     value: string;
@@ -1639,17 +1545,105 @@ function Select({
     required?: boolean;
 }) {
     return (
-        <label className="block">
-            <span className="mb-2 block text-xs font-medium text-[var(--text-soft)]">{label}</span>
-
+        <label className="block space-y-2">
+            <span className="chronos-label">{label}</span>
             <select
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
                 required={required}
-                className="linear-input"
+                className="h-11 w-full px-4 text-sm"
             >
                 {children}
             </select>
         </label>
+    );
+}
+
+function EmptyState({ title, text }: { title: string; text: string }) {
+    return (
+        <div className="rounded-[20px] border border-[var(--chronos-line)] bg-[var(--chronos-olive)]/5 p-5 text-center">
+            <p className="text-sm font-medium text-[var(--chronos-ink)]">{title}</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--chronos-muted)]">{text}</p>
+        </div>
+    );
+}
+
+function MessageRow({
+    message,
+    actionLoading,
+    onCancel,
+    onRetry,
+}: {
+    message: WhatsAppScheduledMessage;
+    actionLoading: string;
+    onCancel: () => void;
+    onRetry: () => void;
+}) {
+    return (
+        <div className="space-y-3 p-4 transition hover:bg-[var(--chronos-olive)]/5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <p className="text-sm font-medium text-[var(--chronos-ink)]">
+                        {message.templateName || "Template message"}
+                    </p>
+                    <p className="mt-1 text-sm text-[var(--chronos-muted)]">To {message.recipientPhone}</p>
+                    <p className="mt-1 text-xs text-[var(--chronos-muted)]">
+                        Scheduled {formatDate(message.scheduledAt)}
+                    </p>
+                    {message.sentAt && (
+                        <p className="mt-1 text-xs text-[var(--chronos-muted)]">Sent {formatDate(message.sentAt)}</p>
+                    )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className={`chronos-pill ${getStatusClass(message.status)}`}>{message.status}</span>
+
+                    {(message.status === "QUEUED" || message.status === "FAILED" || message.status === "DRAFT") && (
+                        <button
+                            type="button"
+                            onClick={onCancel}
+                            disabled={actionLoading === message.id}
+                            className="chronos-button chronos-button-soft h-9 border-[var(--chronos-danger)] text-[var(--chronos-danger)] hover:bg-[var(--chronos-danger)] hover:text-[#090A0D]"
+                        >
+                            Cancel
+                        </button>
+                    )}
+
+                    {message.status === "FAILED" && (
+                        <button
+                            type="button"
+                            onClick={onRetry}
+                            disabled={actionLoading === message.id}
+                            className="chronos-button chronos-button-soft h-9"
+                        >
+                            Retry
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {message.errorMessage && (
+                <div className="rounded-[18px] border border-[var(--chronos-danger)]/40 bg-[var(--chronos-danger)]/5 p-3 text-sm leading-6 text-[var(--chronos-danger)]">
+                    {message.errorMessage}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function PayloadBlock({ title, value }: { title: string; value: unknown }) {
+    const formatted = formatPayload(value);
+
+    if (!formatted) {
+        return null;
+    }
+
+    return (
+        <div className="mb-3 last:mb-0">
+            <p className="chronos-label mb-2">{title}</p>
+            <pre className="max-h-56 overflow-auto rounded-[18px] border border-[var(--chronos-line)] bg-[var(--chronos-canvas)] p-3 text-xs leading-6 text-[var(--chronos-muted)]">
+                {formatted}
+            </pre>
+        </div>
     );
 }

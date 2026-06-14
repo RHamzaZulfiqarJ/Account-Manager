@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, KeyRound, Loader2, Lock } from "lucide-react";
@@ -16,6 +16,16 @@ export default function ResetPasswordPage() {
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState("");
     const [error, setError] = useState("");
+
+    const passwordsMatch = useMemo(() => {
+        if (!confirmPassword) {
+            return true;
+        }
+
+        return password === confirmPassword;
+    }, [password, confirmPassword]);
+
+    const canSubmit = password.length >= 8 && confirmPassword.length >= 8 && passwordsMatch && !loading;
 
     const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -47,10 +57,10 @@ export default function ResetPasswordPage() {
                 }),
             });
 
-            const data = await res.json();
+            const data = await res.json().catch(() => null);
 
             if (!res.ok) {
-                throw new Error(data.message || "Password reset failed");
+                throw new Error(data?.message || data?.error || "Password reset failed");
             }
 
             setMessage("Password reset successful. Redirecting to login...");
@@ -68,114 +78,162 @@ export default function ResetPasswordPage() {
     };
 
     return (
-        <main className="linear-page relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
-            <div className="pointer-events-none absolute inset-0 linear-grid-bg opacity-40" />
+        <main className="chronos-page min-h-screen overflow-hidden px-4 py-5 sm:px-6 md:px-10 lg:px-14 xl:px-20">
+            <AuthTopBar backLabel="Login" onBack={() => router.push("/login")} />
 
-            <div className="fixed left-4 right-4 top-4 z-20 flex items-center justify-between md:left-8 md:right-8">
-                <button type="button" onClick={() => router.push("/login")} className="linear-button-secondary">
-                    <ArrowLeft className="h-4 w-4" strokeWidth={1.5} />
-                    Login
-                </button>
+            <section className="mx-auto grid min-h-[calc(100vh-40px)] w-full max-w-[1180px] items-center gap-12 pt-24 lg:grid-cols-[minmax(0,1fr)_440px] lg:gap-20">
+                <motion.div
+                    initial={{ opacity: 0, y: 28 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+                    className="hidden min-w-0 lg:block"
+                >
+                    <div className="chronos-line mb-8" />
+                    <p className="chronos-label">Recovery / Final gate</p>
 
-                <ThemeToggle />
-            </div>
+                    <h1 className="mt-7 max-w-4xl text-[clamp(3rem,6vw,5.4rem)] font-extralight leading-[0.9] tracking-[-0.085em] text-[var(--chronos-ink)]">
+                        Set a new access key.
+                    </h1>
 
-            <motion.section
-                initial={{ opacity: 0, y: 8, scale: 0.985 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                className="linear-panel relative z-10 w-full max-w-[430px] overflow-hidden"
-            >
-                <div className="border-b border-[var(--border)] px-6 py-6">
-                    <button
-                        type="button"
-                        onClick={() => router.push("/")}
-                        className="mb-6 flex items-center gap-3 text-left"
-                    >
-                        <AppLogo size="md" />
-
-                        <span>
-                            <span className="block text-sm font-semibold tracking-[-0.02em] text-[var(--text)]">
-                                MIMICO
-                            </span>
-                            <span className="block text-xs text-[var(--text-muted)]">Account Manager</span>
-                        </span>
-                    </button>
-
-                    <h1 className="linear-title text-2xl">Create new password</h1>
-
-                    <p className="mt-2 text-sm leading-6 text-[var(--text-soft)]">
-                        Your reset link is valid for 15 minutes.
+                    <p className="chronos-subtitle mt-7 max-w-2xl">
+                        Create a new password and return to your workspace. Keep it strong and memorable.
                     </p>
-                </div>
+                </motion.div>
 
-                <form onSubmit={handleSubmit} className="space-y-4 px-6 py-6">
-                    <div className="space-y-2">
-                        <label className="text-xs font-medium text-[var(--text-soft)]">New password</label>
+                <motion.div
+                    initial={{ opacity: 0, y: 24, scale: 0.985 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1], delay: 0.08 }}
+                    className="w-full min-w-0"
+                >
+                    <AuthCard>
+                        <AuthBrand label="Password reset" />
 
-                        <div className="relative">
-                            <Lock
-                                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]"
-                                strokeWidth={1.5}
-                            />
-
-                            <input
-                                type="password"
-                                required
-                                minLength={8}
-                                value={password}
-                                onChange={(event) => setPassword(event.target.value)}
-                                placeholder="At least 8 characters"
-                                className="linear-input pl-9"
-                            />
+                        <div className="mb-7">
+                            <p className="chronos-label">New password</p>
+                            <h2 className="mt-3 text-4xl font-extralight tracking-[-0.07em] text-[var(--chronos-ink)] sm:text-5xl">
+                                Re-entry
+                            </h2>
+                            <p className="mt-4 text-sm leading-7 text-[var(--chronos-muted)]">
+                                Use at least 8 characters. Matching is checked before submission.
+                            </p>
                         </div>
-                    </div>
 
-                    <div className="space-y-2">
-                        <label className="text-xs font-medium text-[var(--text-soft)]">Confirm password</label>
+                        <form onSubmit={handleSubmit} className="space-y-5">
+                            <AuthField label="New password" icon={<Lock className="h-4 w-4" strokeWidth={1.75} />}>
+                                <input
+                                    type="password"
+                                    required
+                                    minLength={8}
+                                    value={password}
+                                    onChange={(event) => setPassword(event.target.value)}
+                                    placeholder="At least 8 characters"
+                                    className="h-12 w-full pl-11 pr-4 text-sm"
+                                />
+                            </AuthField>
 
-                        <div className="relative">
-                            <KeyRound
-                                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]"
-                                strokeWidth={1.5}
-                            />
+                            <AuthField
+                                label="Confirm password"
+                                icon={<KeyRound className="h-4 w-4" strokeWidth={1.75} />}
+                            >
+                                <input
+                                    type="password"
+                                    required
+                                    minLength={8}
+                                    value={confirmPassword}
+                                    onChange={(event) => setConfirmPassword(event.target.value)}
+                                    placeholder="Repeat new password"
+                                    className="h-12 w-full pl-11 pr-4 text-sm"
+                                />
+                            </AuthField>
 
-                            <input
-                                type="password"
-                                required
-                                minLength={8}
-                                value={confirmPassword}
-                                onChange={(event) => setConfirmPassword(event.target.value)}
-                                placeholder="Repeat new password"
-                                className="linear-input pl-9"
-                            />
-                        </div>
-                    </div>
+                            {!passwordsMatch && (
+                                <div className="rounded-[20px] border border-[var(--chronos-danger)]/40 bg-[var(--chronos-danger)]/5 p-4 text-sm text-[var(--chronos-danger)]">
+                                    Passwords do not match.
+                                </div>
+                            )}
 
-                    {message && (
-                        <div className="flex items-start gap-3 rounded-md border border-[rgba(34,197,94,0.24)] bg-[rgba(34,197,94,0.08)] px-3 py-2 text-sm font-medium text-[var(--success)]">
-                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.5} />
-                            <span>{message}</span>
-                        </div>
-                    )}
+                            {message && <AuthSuccess message={message} />}
+                            {error && <AuthAlert message={error} />}
 
-                    {error && (
-                        <div className="flex items-start gap-3 rounded-md border border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] px-3 py-2 text-sm font-medium text-red-300">
-                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.5} />
-                            <span>{error}</span>
-                        </div>
-                    )}
-
-                    <button type="submit" disabled={loading} className="linear-button-primary h-10 w-full">
-                        {loading ? (
-                            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
-                        ) : (
-                            <ArrowRight className="h-4 w-4" strokeWidth={1.5} />
-                        )}
-                        Reset password
-                    </button>
-                </form>
-            </motion.section>
+                            <button type="submit" disabled={!canSubmit} className="chronos-button w-full">
+                                {loading ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
+                                ) : (
+                                    <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
+                                )}
+                                Reset password
+                            </button>
+                        </form>
+                    </AuthCard>
+                </motion.div>
+            </section>
         </main>
+    );
+}
+
+function AuthTopBar({ backLabel, onBack }: { backLabel: string; onBack: () => void }) {
+    return (
+        <div className="fixed left-4 right-4 top-5 z-20 flex items-center justify-between gap-3 sm:left-6 sm:right-6 md:left-10 md:right-10 lg:left-14 lg:right-14 xl:left-20 xl:right-20">
+            <button type="button" onClick={onBack} className="chronos-button chronos-button-soft">
+                <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
+                {backLabel}
+            </button>
+
+            <ThemeToggle />
+        </div>
+    );
+}
+
+function AuthCard({ children }: { children: React.ReactNode }) {
+    return (
+        <div className="rounded-[28px] border border-[var(--chronos-line-strong)] bg-[var(--chronos-sheet)]/76 p-5 shadow-[0_30px_140px_rgba(0,0,0,0.42)] backdrop-blur-2xl sm:p-7 md:p-8">
+            {children}
+        </div>
+    );
+}
+
+function AuthBrand({ label }: { label: string }) {
+    return (
+        <div className="mb-9 flex items-center gap-3">
+            <AppLogo size="md" />
+            <div>
+                <p className="text-sm font-medium text-[var(--chronos-ink)]">MIMICO</p>
+                <p className="chronos-label mt-1">{label}</p>
+            </div>
+        </div>
+    );
+}
+
+function AuthField({ label, icon, children }: { label: string; icon: React.ReactNode; children: React.ReactNode }) {
+    return (
+        <div className="space-y-2">
+            <label className="chronos-label">{label}</label>
+
+            <div className="relative">
+                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[var(--chronos-muted)]">
+                    {icon}
+                </span>
+                {children}
+            </div>
+        </div>
+    );
+}
+
+function AuthAlert({ message }: { message: string }) {
+    return (
+        <div className="flex items-start gap-3 rounded-[20px] border border-[var(--chronos-danger)]/40 bg-[var(--chronos-danger)]/5 p-4 text-sm leading-6 text-[var(--chronos-danger)]">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} />
+            <span>{message}</span>
+        </div>
+    );
+}
+
+function AuthSuccess({ message }: { message: string }) {
+    return (
+        <div className="flex items-start gap-3 rounded-[20px] border border-[var(--chronos-olive)]/40 bg-[var(--chronos-olive)]/8 p-4 text-sm leading-6 text-[var(--chronos-body)]">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--chronos-olive)]" strokeWidth={1.75} />
+            <span>{message}</span>
+        </div>
     );
 }

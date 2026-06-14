@@ -5,14 +5,15 @@ import { motion } from "framer-motion";
 import {
     AlertTriangle,
     Calendar,
+    CalendarClock,
     CheckCircle2,
     Clock,
-    Filter,
+    FileText,
     Layers3,
     List,
     Loader2,
     Plus,
-    RotateCcw,
+    RefreshCw,
     Search,
     Send,
     Trash2,
@@ -41,14 +42,14 @@ type PlatformFilter = "all" | "twitter" | "mastodon" | "threads";
 type TypeFilter = "all" | "scheduled" | "immediate";
 
 const platformOptions: { label: string; value: PlatformFilter }[] = [
-    { label: "All", value: "all" },
+    { label: "All Platforms", value: "all" },
     { label: "Twitter / X", value: "twitter" },
     { label: "Mastodon", value: "mastodon" },
     { label: "Threads", value: "threads" },
 ];
 
 const statusOptions: { label: string; value: StatusFilter }[] = [
-    { label: "All", value: "all" },
+    { label: "All Status", value: "all" },
     { label: "Pending", value: "pending" },
     { label: "Processing", value: "processing" },
     { label: "Posted", value: "posted" },
@@ -56,32 +57,16 @@ const statusOptions: { label: string; value: StatusFilter }[] = [
 ];
 
 const typeOptions: { label: string; value: TypeFilter }[] = [
-    { label: "All", value: "all" },
+    { label: "All Types", value: "all" },
     { label: "Scheduled", value: "scheduled" },
-    { label: "Immediate / Posted", value: "immediate" },
+    { label: "Immediate", value: "immediate" },
 ];
 
 const getPostTime = (post: Post) => {
     return post.postedAt || post.scheduledAt || post.createdAt;
 };
 
-const getStatusClass = (status: Post["status"]) => {
-    if (status === "posted") {
-        return "border-[rgba(34,197,94,0.22)] bg-[rgba(34,197,94,0.08)] text-[var(--success)]";
-    }
-
-    if (status === "pending") {
-        return "border-[rgba(245,158,11,0.25)] bg-[rgba(245,158,11,0.08)] text-[var(--warning)]";
-    }
-
-    if (status === "processing") {
-        return "border-[rgba(94,106,210,0.28)] bg-[rgba(94,106,210,0.09)] text-[var(--accent)]";
-    }
-
-    return "border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.08)] text-red-300";
-};
-
-const getPostTimingLabel = (post: Post) => {
+const getTimingLabel = (post: Post) => {
     if (post.status === "posted") {
         return "Posted";
     }
@@ -91,6 +76,22 @@ const getPostTimingLabel = (post: Post) => {
     }
 
     return "Queued";
+};
+
+const getStatusStyle = (status: Post["status"]) => {
+    if (status === "posted") {
+        return "border-[var(--chronos-olive)] text-[var(--chronos-olive-soft)]";
+    }
+
+    if (status === "pending") {
+        return "border-[var(--chronos-olive-soft)] text-[var(--chronos-body)]";
+    }
+
+    if (status === "processing") {
+        return "border-[var(--chronos-line-strong)] text-[var(--chronos-muted)]";
+    }
+
+    return "border-[var(--chronos-danger)] text-[var(--chronos-danger)]";
 };
 
 export default function PublishingPage() {
@@ -164,6 +165,18 @@ export default function PublishingPage() {
         });
     }, [posts, searchQuery, statusFilter, platformFilter, typeFilter]);
 
+    const stats = useMemo(() => {
+        return {
+            total: posts.length,
+            filtered: filteredPosts.length,
+            scheduled: posts.filter((post) => post.scheduledAt && post.status !== "posted").length,
+            pending: posts.filter((post) => post.status === "pending").length,
+            processing: posts.filter((post) => post.status === "processing").length,
+            posted: posts.filter((post) => post.status === "posted").length,
+            failed: posts.filter((post) => post.status === "failed").length,
+        };
+    }, [posts, filteredPosts]);
+
     const hasActiveFilters =
         searchQuery.trim().length > 0 || statusFilter !== "all" || platformFilter !== "all" || typeFilter !== "all";
 
@@ -176,16 +189,15 @@ export default function PublishingPage() {
 
     const deletePost = async (post: Post) => {
         if (post.status === "processing") {
-            setError("This post is currently being processed and cannot be deleted.");
+            setError("This post is currently processing and cannot be deleted.");
             return;
         }
 
-        const message =
+        const confirmed = window.confirm(
             post.status === "posted"
-                ? "This will remove the post from your app history only. It will not delete it from the social platform. Continue?"
-                : "Delete this scheduled post? This action cannot be undone.";
-
-        const confirmed = window.confirm(message);
+                ? "This removes the post from app history only. It will not delete it from the platform."
+                : "Delete this scheduled post?",
+        );
 
         if (!confirmed) {
             return;
@@ -213,267 +225,157 @@ export default function PublishingPage() {
         }
     };
 
-    const stats = useMemo(() => {
-        return {
-            total: posts.length,
-            filtered: filteredPosts.length,
-            pending: posts.filter((post) => post.status === "pending").length,
-            processing: posts.filter((post) => post.status === "processing").length,
-            posted: posts.filter((post) => post.status === "posted").length,
-            failed: posts.filter((post) => post.status === "failed").length,
-            scheduled: posts.filter((post) => post.scheduledAt && post.status !== "posted").length,
-        };
-    }, [posts, filteredPosts]);
-
     if (initialLoading) {
         return (
-            <div className="flex min-h-[70vh] items-center justify-center">
-                <motion.div
-                    initial={{ opacity: 0, y: 6, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-                    className="linear-card flex items-center gap-3 px-4 py-3"
-                >
-                    <Loader2 className="h-4 w-4 animate-spin text-[var(--accent)]" strokeWidth={1.5} />
-                    <span className="text-sm font-medium text-[var(--text-soft)]">Loading publishing workspace</span>
-                </motion.div>
+            <div className="flex min-h-[60vh] items-center justify-center">
+                <div className="chronos-panel flex items-center gap-3 px-5 py-4">
+                    <Loader2 className="h-4 w-4 animate-spin text-[var(--chronos-olive)]" strokeWidth={1.75} />
+                    <span className="chronos-label">Loading publishing</span>
+                </div>
             </div>
         );
     }
 
     return (
-        <motion.div
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-            className="space-y-5"
-        >
-            <div className="linear-panel overflow-hidden">
-                <div className="border-b border-[var(--border)] px-5 py-4">
-                    <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
-                        <div className="min-w-0">
-                            <div className="mb-2 flex items-center gap-2">
-                                <span className="linear-badge border-[rgba(94,106,210,0.28)] bg-[rgba(94,106,210,0.09)] text-[var(--accent)]">
-                                    Publishing control
-                                </span>
-                                <span className="hidden text-xs text-[var(--text-muted)] sm:block">
-                                    Twitter / X, Mastodon, and Instagram Threads
-                                </span>
-                            </div>
+        <div className="space-y-6">
+            <motion.section
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+                className="chronos-panel p-5 sm:p-6"
+            >
+                <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+                    <div>
+                        <p className="chronos-label">Publishing</p>
+                        <h1 className="mt-2 text-3xl font-extralight tracking-[-0.07em] text-[var(--chronos-ink)] sm:text-4xl">
+                            Content operations
+                        </h1>
+                        <p className="mt-2 text-sm text-[var(--chronos-muted)]">
+                            Compose, schedule, filter, delete and monitor posts.
+                        </p>
+                    </div>
 
-                            <h1 className="linear-title text-2xl md:text-3xl">Publishing</h1>
-
-                            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--text-soft)]">
-                                Create, schedule, search, filter, and manage all social posts from a focused
-                                Linear-style workspace.
-                            </p>
-                        </div>
-
-                        <div className="flex flex-col gap-2 sm:flex-row">
-                            <div className="flex rounded-md border border-[var(--border)] bg-[var(--canvas)] p-1">
-                                <button
-                                    type="button"
-                                    onClick={() => setView("list")}
-                                    className={`flex h-8 items-center gap-2 rounded px-3 text-xs font-medium ${
-                                        view === "list"
-                                            ? "bg-[var(--surface-3)] text-[var(--text)] shadow-[var(--shadow-line)]"
-                                            : "text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]"
-                                    }`}
-                                >
-                                    <List className="h-4 w-4" strokeWidth={1.5} />
-                                    List
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={() => setView("calendar")}
-                                    className={`flex h-8 items-center gap-2 rounded px-3 text-xs font-medium ${
-                                        view === "calendar"
-                                            ? "bg-[var(--surface-3)] text-[var(--text)] shadow-[var(--shadow-line)]"
-                                            : "text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]"
-                                    }`}
-                                >
-                                    <Calendar className="h-4 w-4" strokeWidth={1.5} />
-                                    Calendar
-                                </button>
-                            </div>
+                    <div className="flex flex-wrap gap-3">
+                        <div className="flex rounded-full border border-[var(--chronos-line)] p-1">
+                            <button
+                                type="button"
+                                onClick={() => setView("list")}
+                                className={`chronos-button h-10 px-4 ${view === "list" ? "" : "chronos-button-soft"}`}
+                            >
+                                <List className="h-4 w-4" strokeWidth={1.75} />
+                                List
+                            </button>
 
                             <button
                                 type="button"
-                                onClick={() => setIsComposeOpen(true)}
-                                className="linear-button-primary h-9"
+                                onClick={() => setView("calendar")}
+                                className={`chronos-button h-10 px-4 ${view === "calendar" ? "" : "chronos-button-soft"}`}
                             >
-                                <Plus className="h-4 w-4" strokeWidth={1.5} />
-                                Compose
+                                <Calendar className="h-4 w-4" strokeWidth={1.75} />
+                                Calendar
                             </button>
                         </div>
+
+                        <button type="button" onClick={() => setIsComposeOpen(true)} className="chronos-button">
+                            <Plus className="h-4 w-4" strokeWidth={1.75} />
+                            Compose
+                        </button>
+
+                        <button type="button" onClick={loadPosts} className="chronos-button chronos-button-soft">
+                            <RefreshCw className="h-4 w-4" strokeWidth={1.75} />
+                            Refresh
+                        </button>
                     </div>
                 </div>
+            </motion.section>
 
-                <div className="grid border-b border-[var(--border)] md:grid-cols-6">
-                    <HeaderMetric label="Total" value={stats.total} />
-                    <HeaderMetric label="Filtered" value={stats.filtered} />
-                    <HeaderMetric label="Pending" value={stats.pending} />
-                    <HeaderMetric label="Processing" value={stats.processing} />
-                    <HeaderMetric label="Posted" value={stats.posted} />
-                    <HeaderMetric label="Failed" value={stats.failed} />
-                </div>
-            </div>
+            <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+                <StatCard title="Total" value={stats.total} icon={Layers3} />
+                <StatCard title="Filtered" value={stats.filtered} icon={Search} />
+                <StatCard title="Scheduled" value={stats.scheduled} icon={CalendarClock} />
+                <StatCard title="Queued" value={stats.pending + stats.processing} icon={Clock} />
+                <StatCard title="Posted" value={stats.posted} icon={CheckCircle2} />
+                <StatCard title="Failed" value={stats.failed} icon={AlertTriangle} danger={stats.failed > 0} />
+            </section>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <MetricCard title="Total Posts" value={stats.total} icon={Layers3} />
-                <MetricCard title="Scheduled" value={stats.scheduled} icon={Calendar} warning={stats.scheduled > 0} />
-                <MetricCard title="Posted" value={stats.posted} icon={CheckCircle2} success />
-                <MetricCard title="Failed" value={stats.failed} icon={AlertTriangle} danger={stats.failed > 0} />
-            </div>
-
-            <div className="linear-card overflow-hidden">
-                <div className="border-b border-[var(--border)] bg-[var(--surface-hover)] px-4 py-3">
-                    <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
-                        <div className="flex items-center gap-3">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[rgba(94,106,210,0.28)] bg-[rgba(94,106,210,0.09)] text-[var(--accent)]">
-                                <Filter className="h-4 w-4" strokeWidth={1.5} />
-                            </div>
-
-                            <div>
-                                <h2 className="text-sm font-semibold text-[var(--text)]">
-                                    {view === "list" ? "Publishing Table" : "Publishing Calendar"}
-                                </h2>
-                                <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
-                                    Showing {filteredPosts.length} of {posts.length} posts.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col gap-2 sm:flex-row">
-                            {hasActiveFilters && (
-                                <button type="button" onClick={clearFilters} className="linear-button-danger h-9">
-                                    <RotateCcw className="h-4 w-4" strokeWidth={1.5} />
-                                    Clear
-                                </button>
-                            )}
-
-                            <button type="button" onClick={loadPosts} className="linear-button-secondary h-9">
-                                <RotateCcw className="h-4 w-4" strokeWidth={1.5} />
-                                Refresh
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="border-b border-[var(--border)] p-4">
+            <section className="chronos-panel overflow-hidden">
+                <div className="grid gap-4 border-b border-[var(--chronos-line)] p-4 xl:grid-cols-[minmax(0,1fr)_190px_170px_170px_auto]">
                     <div className="relative">
                         <Search
-                            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]"
-                            strokeWidth={1.5}
+                            className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--chronos-muted)]"
+                            strokeWidth={1.75}
                         />
 
                         <input
                             value={searchQuery}
                             onChange={(event) => setSearchQuery(event.target.value)}
-                            placeholder="Search by content, username, platform, or status..."
-                            className="linear-input h-10 pl-9 pr-10"
+                            placeholder="Search content, account, status or platform..."
+                            className="h-11 w-full pl-11 pr-10 text-sm"
                         />
 
                         {searchQuery && (
                             <button
                                 type="button"
                                 onClick={() => setSearchQuery("")}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text)]"
+                                className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--chronos-muted)] hover:text-[var(--chronos-ink)]"
                             >
-                                <X className="h-4 w-4" strokeWidth={1.5} />
+                                <X className="h-4 w-4" strokeWidth={1.75} />
                             </button>
                         )}
                     </div>
 
-                    <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-3">
-                        <FilterGroup title="Platform" subtitle="Channel">
-                            {platformOptions.map((option) => {
-                                const platformInfo = option.value !== "all" ? PLATFORMS[option.value] : null;
-                                const Icon = platformInfo?.icon || Layers3;
+                    <SelectField
+                        value={platformFilter}
+                        onChange={(value) => setPlatformFilter(value as PlatformFilter)}
+                    >
+                        {platformOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                                {option.label}
+                            </option>
+                        ))}
+                    </SelectField>
 
-                                return (
-                                    <FilterButton
-                                        key={option.value}
-                                        active={platformFilter === option.value}
-                                        onClick={() => setPlatformFilter(option.value)}
-                                    >
-                                        <Icon className="h-4 w-4" />
-                                        {option.label}
-                                    </FilterButton>
-                                );
-                            })}
-                        </FilterGroup>
+                    <SelectField value={statusFilter} onChange={(value) => setStatusFilter(value as StatusFilter)}>
+                        {statusOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                                {option.label}
+                            </option>
+                        ))}
+                    </SelectField>
 
-                        <FilterGroup title="Status" subtitle="Progress">
-                            {statusOptions.map((option) => (
-                                <FilterButton
-                                    key={option.value}
-                                    active={statusFilter === option.value}
-                                    onClick={() => setStatusFilter(option.value)}
-                                >
-                                    {option.label}
-                                </FilterButton>
-                            ))}
-                        </FilterGroup>
+                    <SelectField value={typeFilter} onChange={(value) => setTypeFilter(value as TypeFilter)}>
+                        {typeOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                                {option.label}
+                            </option>
+                        ))}
+                    </SelectField>
 
-                        <FilterGroup title="Post Type" subtitle="Timing">
-                            {typeOptions.map((option) => (
-                                <FilterButton
-                                    key={option.value}
-                                    active={typeFilter === option.value}
-                                    onClick={() => setTypeFilter(option.value)}
-                                >
-                                    {option.label}
-                                </FilterButton>
-                            ))}
-                        </FilterGroup>
-                    </div>
-
-                    {hasActiveFilters && (
-                        <div className="mt-4 flex flex-wrap items-center gap-2">
-                            <span className="text-xs font-medium text-[var(--text-muted)]">Active filters:</span>
-
-                            {searchQuery.trim() && <ActiveFilter label={`Search: ${searchQuery}`} />}
-
-                            {platformFilter !== "all" && (
-                                <ActiveFilter
-                                    label={`Platform: ${PLATFORMS[platformFilter]?.name || platformFilter}`}
-                                />
-                            )}
-
-                            {statusFilter !== "all" && <ActiveFilter label={`Status: ${statusFilter}`} />}
-
-                            {typeFilter !== "all" && (
-                                <ActiveFilter
-                                    label={`Type: ${typeFilter === "scheduled" ? "Scheduled" : "Immediate / Posted"}`}
-                                />
-                            )}
-                        </div>
-                    )}
+                    <button
+                        type="button"
+                        onClick={clearFilters}
+                        disabled={!hasActiveFilters}
+                        className="chronos-button chronos-button-soft"
+                    >
+                        Clear
+                    </button>
                 </div>
 
                 {error && (
-                    <div className="m-4 flex items-start gap-3 rounded-md border border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] px-3 py-2 text-sm font-medium text-red-300">
-                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.5} />
+                    <div className="m-4 rounded-[20px] border border-[var(--chronos-danger)]/40 bg-[var(--chronos-danger)]/5 p-4 text-sm text-[var(--chronos-danger)]">
                         {error}
                     </div>
                 )}
 
                 {loadingPosts ? (
                     <div className="flex items-center justify-center gap-3 px-6 py-16">
-                        <Loader2 className="h-4 w-4 animate-spin text-[var(--accent)]" strokeWidth={1.5} />
-                        <span className="text-sm font-medium text-[var(--text-soft)]">Refreshing posts</span>
+                        <Loader2 className="h-4 w-4 animate-spin text-[var(--chronos-olive)]" strokeWidth={1.75} />
+                        <span className="chronos-label">Refreshing posts</span>
                     </div>
                 ) : posts.length === 0 ? (
-                    <EmptyState
-                        icon={Send}
-                        title="No posts yet"
-                        text="Compose your first Twitter/X, Mastodon, or Instagram Threads post."
-                    />
+                    <EmptyState icon={Send} title="No posts yet" text="Compose your first post." />
                 ) : filteredPosts.length === 0 ? (
-                    <EmptyState icon={Search} title="No matching posts" text="Change your search or filters." />
+                    <EmptyState icon={Search} title="No results" text="Change search or filters." />
                 ) : view === "calendar" ? (
                     <PublishingCalendar
                         posts={filteredPosts}
@@ -483,115 +385,32 @@ export default function PublishingPage() {
                     />
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full min-w-[980px]">
-                            <thead className="border-b border-[var(--border)] bg-[var(--canvas)]">
+                        <table className="w-full min-w-[920px] text-left">
+                            <thead className="border-b border-[var(--chronos-line)] text-xs uppercase tracking-[0.14em] text-[var(--chronos-muted)]">
                                 <tr>
-                                    <TableHead>Account</TableHead>
-                                    <TableHead>Content</TableHead>
-                                    <TableHead>Time</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead align="right">Actions</TableHead>
+                                    <th className="px-5 py-4 font-medium">Account</th>
+                                    <th className="px-5 py-4 font-medium">Content</th>
+                                    <th className="px-5 py-4 font-medium">Timing</th>
+                                    <th className="px-5 py-4 font-medium">Status</th>
+                                    <th className="px-5 py-4 text-right font-medium">Action</th>
                                 </tr>
                             </thead>
 
-                            <tbody className="divide-y divide-[var(--border)]">
-                                {filteredPosts.map((post, index) => {
-                                    const platform = PLATFORMS[post.socialAccount.platform];
-                                    const Icon = platform?.icon || Send;
-                                    const postTime = getPostTime(post);
-                                    const isDeleting = deletingPostId === post.id;
-
-                                    return (
-                                        <motion.tr
-                                            key={post.id}
-                                            initial={{ opacity: 0, y: 6 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            transition={{
-                                                delay: index * 0.015,
-                                                duration: 0.15,
-                                                ease: [0.16, 1, 0.3, 1],
-                                            }}
-                                            className="transition-colors hover:bg-[var(--surface-hover)]"
-                                        >
-                                            <td className="px-4 py-3 align-top">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--surface-3)] text-[var(--text)] shadow-[var(--shadow-line)]">
-                                                        <Icon className="h-4 w-4" />
-                                                    </div>
-
-                                                    <div className="min-w-0">
-                                                        <h4 className="truncate text-sm font-medium text-[var(--text)]">
-                                                            @{post.socialAccount.accountUsername}
-                                                        </h4>
-                                                        <p className="mt-1 text-xs text-[var(--text-muted)]">
-                                                            {platform?.name || post.socialAccount.platform}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </td>
-
-                                            <td className="max-w-md px-4 py-3 align-top">
-                                                <p className="line-clamp-3 text-sm leading-6 text-[var(--text-soft)]">
-                                                    {post.content}
-                                                </p>
-                                            </td>
-
-                                            <td className="px-4 py-3 align-top">
-                                                <div className="flex items-start gap-2 text-sm text-[var(--text-soft)]">
-                                                    <Clock
-                                                        className="mt-0.5 h-4 w-4 text-[var(--text-muted)]"
-                                                        strokeWidth={1.5}
-                                                    />
-                                                    <div>
-                                                        <p className="font-medium text-[var(--text-soft)]">
-                                                            {getPostTimingLabel(post)}
-                                                        </p>
-
-                                                        <p className="mt-1 text-xs text-[var(--text-muted)]">
-                                                            {new Date(postTime).toLocaleString()}
-                                                        </p>
-
-                                                        {!post.scheduledAt && post.status === "pending" && (
-                                                            <span className="mt-2 inline-flex items-center gap-1 text-xs text-[var(--success)]">
-                                                                <CheckCircle2 className="h-3 w-3" strokeWidth={1.5} />
-                                                                Immediate
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </td>
-
-                                            <td className="px-4 py-3 align-top">
-                                                <span
-                                                    className={`linear-badge uppercase ${getStatusClass(post.status)}`}
-                                                >
-                                                    {post.status}
-                                                </span>
-                                            </td>
-
-                                            <td className="px-4 py-3 text-right align-top">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => deletePost(post)}
-                                                    disabled={isDeleting || post.status === "processing"}
-                                                    className="linear-button-danger h-8 px-3 text-xs"
-                                                >
-                                                    {isDeleting ? (
-                                                        <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
-                                                    ) : (
-                                                        <Trash2 className="h-4 w-4" strokeWidth={1.5} />
-                                                    )}
-                                                    Delete
-                                                </button>
-                                            </td>
-                                        </motion.tr>
-                                    );
-                                })}
+                            <tbody className="divide-y divide-[var(--chronos-line)]">
+                                {filteredPosts.map((post, index) => (
+                                    <PostRow
+                                        key={post.id}
+                                        post={post}
+                                        index={index}
+                                        isDeleting={deletingPostId === post.id}
+                                        onDelete={() => deletePost(post)}
+                                    />
+                                ))}
                             </tbody>
                         </table>
                     </div>
                 )}
-            </div>
+            </section>
 
             <ComposeModal
                 selectedAccounts={selectedAccounts}
@@ -599,130 +418,129 @@ export default function PublishingPage() {
                 isOpen={isComposeOpen}
                 onClose={closeCompose}
             />
-        </motion.div>
-    );
-}
-
-function HeaderMetric({ label, value }: { label: string; value: number }) {
-    return (
-        <div className="border-r border-[var(--border)] px-5 py-4 last:border-r-0">
-            <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">{label}</p>
-            <p className="mt-1 text-2xl font-semibold tracking-[-0.04em] text-[var(--text)]">{value}</p>
         </div>
     );
 }
 
-function MetricCard({
+function StatCard({
     title,
     value,
     icon: Icon,
-    danger = false,
-    warning = false,
-    success = false,
+    danger,
 }: {
     title: string;
     value: number;
     icon: ElementType;
     danger?: boolean;
-    warning?: boolean;
-    success?: boolean;
 }) {
-    const colorClass = danger
-        ? "border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.08)] text-red-300"
-        : warning
-          ? "border-[rgba(245,158,11,0.25)] bg-[rgba(245,158,11,0.08)] text-[var(--warning)]"
-          : success
-            ? "border-[rgba(34,197,94,0.22)] bg-[rgba(34,197,94,0.08)] text-[var(--success)]"
-            : "border-[rgba(94,106,210,0.28)] bg-[rgba(94,106,210,0.09)] text-[var(--accent)]";
-
     return (
-        <motion.div
-            whileHover={{ y: -1 }}
-            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-            className="linear-card p-4"
-        >
-            <div className="flex items-center justify-between gap-4">
-                <div>
-                    <p className="text-sm font-medium text-[var(--text-soft)]">{title}</p>
-                    <h3 className="mt-2 text-3xl font-semibold tracking-[-0.05em] text-[var(--text)]">{value}</h3>
-                </div>
-
-                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md border ${colorClass}`}>
-                    <Icon className="h-5 w-5" strokeWidth={1.5} />
-                </div>
-            </div>
-        </motion.div>
-    );
-}
-
-function FilterGroup({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
-    return (
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--canvas)] p-3">
-            <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">{title}</p>
-
-                <span className="text-[11px] text-[var(--text-muted)]">{subtitle}</span>
+        <div className="chronos-panel p-4">
+            <div className="mb-4 flex items-center justify-between gap-3">
+                <p className="chronos-label">{title}</p>
+                <Icon
+                    className={`h-4 w-4 ${danger ? "text-[var(--chronos-danger)]" : "text-[var(--chronos-olive)]"}`}
+                    strokeWidth={1.75}
+                />
             </div>
 
-            <div className="flex flex-wrap gap-2">{children}</div>
+            <p className="text-3xl font-extralight tracking-[-0.07em] text-[var(--chronos-ink)]">{value}</p>
         </div>
     );
 }
 
-function FilterButton({
-    active,
-    onClick,
+function SelectField({
+    value,
+    onChange,
     children,
 }: {
-    active: boolean;
-    onClick: () => void;
+    value: string;
+    onChange: (value: string) => void;
     children: React.ReactNode;
 }) {
     return (
-        <button
-            type="button"
-            onClick={onClick}
-            className={`inline-flex h-8 items-center gap-2 rounded border px-3 text-xs font-medium transition-colors ${
-                active
-                    ? "border-[rgba(94,106,210,0.34)] bg-[var(--surface-active)] text-[var(--text)]"
-                    : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-soft)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]"
-            }`}
-        >
+        <select value={value} onChange={(event) => onChange(event.target.value)} className="h-11 w-full px-4 text-sm">
             {children}
-        </button>
+        </select>
     );
 }
 
-function ActiveFilter({ label }: { label: string }) {
-    return (
-        <span className="linear-badge border-[rgba(94,106,210,0.28)] bg-[rgba(94,106,210,0.09)] text-[var(--accent)]">
-            {label}
-        </span>
-    );
-}
+function PostRow({
+    post,
+    index,
+    isDeleting,
+    onDelete,
+}: {
+    post: Post;
+    index: number;
+    isDeleting: boolean;
+    onDelete: () => void;
+}) {
+    const platform = PLATFORMS[post.socialAccount.platform];
+    const Icon = platform?.icon || Send;
+    const postTime = getPostTime(post);
 
-function TableHead({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {
     return (
-        <th
-            className={`px-4 py-3 text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)] ${
-                align === "right" ? "text-right" : "text-left"
-            }`}
+        <motion.tr
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: index * 0.02 }}
+            className="transition hover:bg-[var(--chronos-olive)]/5"
         >
-            {children}
-        </th>
+            <td className="px-5 py-4 align-top">
+                <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--chronos-line-strong)] text-[var(--chronos-olive)]">
+                        <Icon className="h-4 w-4" />
+                    </span>
+
+                    <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-[var(--chronos-ink)]">
+                            @{post.socialAccount.accountUsername}
+                        </p>
+                        <p className="mt-1 text-xs text-[var(--chronos-muted)]">
+                            {platform?.name || post.socialAccount.platform}
+                        </p>
+                    </div>
+                </div>
+            </td>
+
+            <td className="max-w-md px-5 py-4 align-top">
+                <p className="line-clamp-2 text-sm leading-6 text-[var(--chronos-muted)]">{post.content}</p>
+            </td>
+
+            <td className="px-5 py-4 align-top">
+                <p className="text-sm text-[var(--chronos-ink)]">{getTimingLabel(post)}</p>
+                <p className="mt-1 text-xs text-[var(--chronos-muted)]">{new Date(postTime).toLocaleString()}</p>
+            </td>
+
+            <td className="px-5 py-4 align-top">
+                <span className={`chronos-pill ${getStatusStyle(post.status)}`}>{post.status}</span>
+            </td>
+
+            <td className="px-5 py-4 text-right align-top">
+                <button
+                    type="button"
+                    onClick={onDelete}
+                    disabled={isDeleting || post.status === "processing"}
+                    className="chronos-button chronos-button-soft h-9 border-[var(--chronos-danger)] text-[var(--chronos-danger)] hover:bg-[var(--chronos-danger)] hover:text-[#090A0D]"
+                >
+                    {isDeleting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
+                    ) : (
+                        <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+                    )}
+                    Delete
+                </button>
+            </td>
+        </motion.tr>
     );
 }
 
 function EmptyState({ icon: Icon, title, text }: { icon: ElementType; title: string; text: string }) {
     return (
-        <div className="px-6 py-16 text-center">
-            <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--canvas)] text-[var(--text-muted)]">
-                <Icon className="h-5 w-5" strokeWidth={1.5} />
-            </div>
-
-            <h3 className="text-sm font-semibold text-[var(--text)]">{title}</h3>
-
-            <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-[var(--text-muted)]">{text}</p>
+        <div className="p-10 text-center">
+            <Icon className="mx-auto h-8 w-8 text-[var(--chronos-olive)]" strokeWidth={1.75} />
+            <h3 className="mt-4 text-2xl font-extralight tracking-[-0.06em] text-[var(--chronos-ink)]">{title}</h3>
+            <p className="mt-2 text-sm text-[var(--chronos-muted)]">{text}</p>
         </div>
     );
 }

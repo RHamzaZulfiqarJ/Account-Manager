@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState, type ElementType } from "react";
 import { motion } from "framer-motion";
 import {
-    Activity,
     AlertTriangle,
     BarChart3,
     Calendar,
@@ -101,7 +100,7 @@ type ActivityItem = {
     danger?: boolean;
 };
 
-const chartColors = ["#5e6ad2", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"];
+const socialPlatforms = ["twitter", "mastodon", "threads"];
 
 const rangeOptions: { label: string; value: RangeFilter }[] = [
     { label: "7D", value: "7" },
@@ -110,7 +109,12 @@ const rangeOptions: { label: string; value: RangeFilter }[] = [
     { label: "All", value: "all" },
 ];
 
-const socialPlatforms = ["twitter", "mastodon", "threads"];
+const chartColors = [
+    "var(--chronos-olive)",
+    "var(--chronos-olive-soft)",
+    "var(--chronos-muted)",
+    "var(--chronos-danger)",
+];
 
 const getErrorMessage = (error: unknown) => {
     if (error instanceof ApiClientError) {
@@ -136,7 +140,7 @@ const normalizePlatform = (platform: string) => {
     }
 
     if (value === "threads") {
-        return "Instagram Threads";
+        return "Threads";
     }
 
     if (value === "whatsapp") {
@@ -191,24 +195,6 @@ const isInRange = (value: string | null | undefined, range: RangeFilter) => {
     return time >= min;
 };
 
-const getStatusClass = (status: string) => {
-    const value = status.toLowerCase();
-
-    if (value === "posted" || value === "sent" || value === "approved" || value === "success") {
-        return "border-[rgba(34,197,94,0.22)] bg-[rgba(34,197,94,0.08)] text-[var(--success)]";
-    }
-
-    if (value === "pending" || value === "queued" || value === "processing") {
-        return "border-[rgba(245,158,11,0.25)] bg-[rgba(245,158,11,0.08)] text-[var(--warning)]";
-    }
-
-    if (value === "failed" || value === "rejected") {
-        return "border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.08)] text-red-300";
-    }
-
-    return "border-[rgba(94,106,210,0.28)] bg-[rgba(94,106,210,0.09)] text-[var(--accent)]";
-};
-
 const buildEmptyTrend = (range: RangeFilter) => {
     const days = range === "all" ? 30 : Number(range);
 
@@ -226,6 +212,24 @@ const buildEmptyTrend = (range: RangeFilter) => {
             failures: 0,
         };
     });
+};
+
+const getStatusClass = (status: string) => {
+    const value = status.toLowerCase();
+
+    if (value === "posted" || value === "sent" || value === "approved" || value === "success") {
+        return "border-[var(--chronos-olive)] text-[var(--chronos-olive-soft)]";
+    }
+
+    if (value === "pending" || value === "queued" || value === "processing") {
+        return "border-[var(--chronos-olive-soft)] text-[var(--chronos-body)]";
+    }
+
+    if (value === "failed" || value === "rejected") {
+        return "border-[var(--chronos-danger)] text-[var(--chronos-danger)]";
+    }
+
+    return "border-[var(--chronos-line-strong)] text-[var(--chronos-muted)]";
 };
 
 export default function AnalyticsPage() {
@@ -268,10 +272,10 @@ export default function AnalyticsPage() {
                 whatsappClient.listScheduledMessages(account.id, { limit: 1, status: "SENT" }),
                 whatsappClient.listScheduledMessages(account.id, { limit: 1, status: "FAILED" }),
                 whatsappClient.listScheduledMessages(account.id, { limit: 1, status: "CANCELLED" }),
-                whatsappClient.listScheduledMessages(account.id, { limit: 60 }),
+                whatsappClient.listScheduledMessages(account.id, { limit: 80 }),
                 whatsappClient.listLogs(account.id, { limit: 1, success: true }),
                 whatsappClient.listLogs(account.id, { limit: 1, success: false }),
-                whatsappClient.listLogs(account.id, { limit: 40 }),
+                whatsappClient.listLogs(account.id, { limit: 50 }),
             ]);
 
             const approvedTemplates = templates.items.filter((template) => {
@@ -325,11 +329,11 @@ export default function AnalyticsPage() {
             ]);
 
             if (!accountsRes.ok) {
-                throw new Error("Failed to load social accounts");
+                throw new Error("Failed to load accounts");
             }
 
             if (!postsRes.ok) {
-                throw new Error("Failed to load social posts");
+                throw new Error("Failed to load posts");
             }
 
             const accountsData = await accountsRes.json();
@@ -347,6 +351,10 @@ export default function AnalyticsPage() {
             setSocialPosts(postsData.posts || []);
             setWhatsAppAccounts(whatsAppAccountData.accounts);
             setWhatsAppSummaries(summaries);
+
+            if (!loading) {
+                showNotice("success", "Analytics refreshed");
+            }
         } catch (error) {
             showNotice("error", getErrorMessage(error));
         } finally {
@@ -391,6 +399,11 @@ export default function AnalyticsPage() {
         const totalFailures = socialFailed + whatsappFailed + failedLogs;
         const totalCompleted = socialPosted + whatsappSent;
         const totalInProgress = socialPending + socialProcessing + whatsappQueued + whatsappProcessing;
+        const totalOutput = socialPosts.length + totalWhatsAppMessages;
+        const cleanRate =
+            totalOutput + failedLogs > 0
+                ? Math.round(((totalOutput + failedLogs - totalFailures) / (totalOutput + failedLogs)) * 100)
+                : 100;
         const templateApprovalRate =
             whatsappTemplates > 0 ? Math.round((whatsappApprovedTemplates / whatsappTemplates) * 100) : 0;
         const logSuccessRate =
@@ -417,6 +430,8 @@ export default function AnalyticsPage() {
             totalFailures,
             totalCompleted,
             totalInProgress,
+            totalOutput,
+            cleanRate,
             templateApprovalRate,
             logSuccessRate,
         };
@@ -426,26 +441,24 @@ export default function AnalyticsPage() {
         const socialRows = socialPlatforms.map((platform) => {
             const accounts = socialAccounts.filter((account) => account.platform.toLowerCase() === platform).length;
             const posts = socialPosts.filter((post) => post.socialAccount.platform.toLowerCase() === platform);
-            const posted = posts.filter((post) => post.status === "posted").length;
+            const completed = posts.filter((post) => post.status === "posted").length;
             const failed = posts.filter((post) => post.status === "failed").length;
 
             return {
                 platform: normalizePlatform(platform),
                 accounts,
                 total: posts.length,
-                completed: posted,
+                completed,
                 failed,
             };
         });
-
-        const whatsappMessages = totals.whatsappMessages;
 
         return [
             ...socialRows,
             {
                 platform: "WhatsApp",
                 accounts: whatsAppAccounts.length,
-                total: whatsappMessages,
+                total: totals.whatsappMessages,
                 completed: totals.whatsappSent,
                 failed: totals.whatsappFailed,
             },
@@ -466,8 +479,7 @@ export default function AnalyticsPage() {
         const map = new Map(base.map((item) => [item.key, item]));
 
         filteredSocialPosts.forEach((post) => {
-            const value = getSocialPostTime(post);
-            const key = getDateKey(new Date(value));
+            const key = getDateKey(new Date(getSocialPostTime(post)));
             const item = map.get(key);
 
             if (item) {
@@ -480,8 +492,7 @@ export default function AnalyticsPage() {
         });
 
         filteredWhatsAppMessages.forEach((message) => {
-            const value = getWhatsAppMessageTime(message);
-            const key = getDateKey(new Date(value));
+            const key = getDateKey(new Date(getWhatsAppMessageTime(message)));
             const item = map.get(key);
 
             if (item) {
@@ -498,9 +509,9 @@ export default function AnalyticsPage() {
 
     const recentActivity = useMemo<ActivityItem[]>(() => {
         const socialItems = socialPosts.map((post) => ({
-            id: post.id,
+            id: `social-${post.id}`,
             title: `${normalizePlatform(post.socialAccount.platform)} post`,
-            subtitle: post.content,
+            subtitle: post.errorMessage || post.content,
             status: post.status,
             platform: normalizePlatform(post.socialAccount.platform),
             time: formatDateTime(getSocialPostTime(post)),
@@ -510,7 +521,7 @@ export default function AnalyticsPage() {
 
         const messageItems = whatsAppSummaries.flatMap((summary) => {
             return summary.recentMessages.map((message) => ({
-                id: message.id,
+                id: `message-${message.id}`,
                 title: "WhatsApp template message",
                 subtitle: `${message.templateName || "Template"} to ${message.recipientPhone}`,
                 status: message.status,
@@ -523,7 +534,7 @@ export default function AnalyticsPage() {
 
         const logItems = whatsAppSummaries.flatMap((summary) => {
             return summary.recentLogs.map((log) => ({
-                id: log.id,
+                id: `log-${log.id}`,
                 title: `WhatsApp ${log.direction.toLowerCase()} log`,
                 subtitle: log.errorMessage || log.recipientPhone || "System log",
                 status: log.success ? "success" : "failed",
@@ -534,18 +545,18 @@ export default function AnalyticsPage() {
             }));
         });
 
-        return [...socialItems, ...messageItems, ...logItems].sort((a, b) => b.rawTime - a.rawTime).slice(0, 12);
+        return [...socialItems, ...messageItems, ...logItems].sort((a, b) => b.rawTime - a.rawTime).slice(0, 10);
     }, [socialPosts, whatsAppSummaries]);
 
     const nextScheduledItems = useMemo(() => {
         const now = Date.now();
 
         const socialScheduled = socialPosts
-            .filter(
-                (post) => post.status === "pending" && post.scheduledAt && new Date(post.scheduledAt).getTime() >= now,
-            )
+            .filter((post) => {
+                return post.status === "pending" && post.scheduledAt && new Date(post.scheduledAt).getTime() >= now;
+            })
             .map((post) => ({
-                id: post.id,
+                id: `social-next-${post.id}`,
                 title: `${normalizePlatform(post.socialAccount.platform)} post`,
                 subtitle: `@${post.socialAccount.accountUsername}`,
                 time: post.scheduledAt || post.createdAt,
@@ -556,7 +567,7 @@ export default function AnalyticsPage() {
             return summary.recentMessages
                 .filter((message) => message.status === "QUEUED" && new Date(message.scheduledAt).getTime() >= now)
                 .map((message) => ({
-                    id: message.id,
+                    id: `wa-next-${message.id}`,
                     title: "WhatsApp message",
                     subtitle: `${message.templateName || "Template"} to ${message.recipientPhone}`,
                     time: message.scheduledAt,
@@ -569,53 +580,17 @@ export default function AnalyticsPage() {
             .slice(0, 6);
     }, [socialPosts, whatsAppSummaries]);
 
-    const insights = useMemo(() => {
-        const busiest = [...platformData].sort((a, b) => b.total - a.total)[0];
-        const approvalText =
-            totals.whatsappTemplates > 0
-                ? `${totals.templateApprovalRate}% template approval rate`
-                : "No WhatsApp templates yet";
-
-        return [
-            {
-                title: "Busiest channel",
-                value: busiest?.platform || "N/A",
-                text: busiest ? `${busiest.total} tracked item(s)` : "No platform data found",
-                icon: TrendingUp,
-            },
-            {
-                title: "Reliability",
-                value: `${totals.logSuccessRate}%`,
-                text:
-                    totals.successfulLogs + totals.failedLogs > 0
-                        ? "WhatsApp API log success rate"
-                        : "No WhatsApp logs yet",
-                icon: CheckCircle2,
-            },
-            {
-                title: "Template health",
-                value: `${totals.whatsappApprovedTemplates}/${totals.whatsappTemplates}`,
-                text: approvalText,
-                icon: FileText,
-            },
-            {
-                title: "Scheduled next",
-                value: nextScheduledItems.length,
-                text: nextScheduledItems.length > 0 ? "Upcoming queued items detected" : "No upcoming scheduled items",
-                icon: Calendar,
-            },
-        ];
-    }, [platformData, totals, nextScheduledItems]);
-
     const exportCsv = () => {
         const rows = [
             ["Metric", "Value"],
             ["Connected channels", totals.channels],
+            ["Total output", totals.totalOutput],
             ["Social posts", totals.socialPosts],
             ["WhatsApp messages", totals.whatsappMessages],
-            ["Completed work", totals.totalCompleted],
-            ["In progress work", totals.totalInProgress],
+            ["Completed", totals.totalCompleted],
+            ["In progress", totals.totalInProgress],
             ["Failures", totals.totalFailures],
+            ["Clean rate", `${totals.cleanRate}%`],
             ["WhatsApp contacts", totals.whatsappContacts],
             ["WhatsApp templates", totals.whatsappTemplates],
             ["Approved templates", totals.whatsappApprovedTemplates],
@@ -634,17 +609,17 @@ export default function AnalyticsPage() {
         const link = document.createElement("a");
 
         link.href = url;
-        link.download = `analytics-${new Date().toISOString().slice(0, 10)}.csv`;
+        link.download = `mimico-analytics-${new Date().toISOString().slice(0, 10)}.csv`;
         link.click();
         URL.revokeObjectURL(url);
     };
 
     if (loading) {
         return (
-            <div className="flex min-h-[70vh] items-center justify-center">
-                <div className="linear-card flex items-center gap-3 px-4 py-3">
-                    <Loader2 className="h-4 w-4 animate-spin text-[var(--accent)]" strokeWidth={1.5} />
-                    <span className="text-sm font-medium text-[var(--text-soft)]">Loading analytics workspace</span>
+            <div className="flex min-h-[60vh] items-center justify-center">
+                <div className="chronos-panel flex items-center gap-3 px-5 py-4">
+                    <Loader2 className="h-4 w-4 animate-spin text-[var(--chronos-olive)]" strokeWidth={1.75} />
+                    <span className="chronos-label">Loading analytics</span>
                 </div>
             </div>
         );
@@ -652,242 +627,198 @@ export default function AnalyticsPage() {
 
     return (
         <motion.div
-            initial={{ opacity: 0, y: 6 }}
+            initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-            className="space-y-5"
+            transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+            className="space-y-6"
         >
-            <div className="linear-panel overflow-hidden">
-                <div className="border-b border-[var(--border)] px-5 py-4">
-                    <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
-                        <div className="flex min-w-0 items-center gap-4">
-                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-[rgba(94,106,210,0.28)] bg-[rgba(94,106,210,0.09)] text-[var(--accent)]">
-                                <BarChart3 className="h-6 w-6" strokeWidth={1.5} />
-                            </div>
+            <section className="chronos-panel overflow-hidden">
+                <div className="flex flex-col gap-5 border-b border-[var(--chronos-line)] p-5 xl:flex-row xl:items-center xl:justify-between">
+                    <div>
+                        <p className="chronos-label">Analytics</p>
+                        <h1 className="mt-2 text-3xl font-extralight tracking-[-0.07em] text-[var(--chronos-ink)] sm:text-4xl">
+                            Operations intelligence
+                        </h1>
+                        <p className="mt-2 text-sm text-[var(--chronos-muted)]">
+                            Real records only: posts, accounts, WhatsApp messages, templates, contacts and logs.
+                        </p>
+                    </div>
 
-                            <div className="min-w-0">
-                                <div className="mb-2 flex items-center gap-2">
-                                    <span className="linear-badge border-[rgba(94,106,210,0.28)] bg-[rgba(94,106,210,0.09)] text-[var(--accent)]">
-                                        Real data
-                                    </span>
-                                    <span className="hidden text-xs text-[var(--text-muted)] sm:block">
-                                        Posts, accounts, WhatsApp messages, templates, contacts, and logs
-                                    </span>
-                                </div>
-
-                                <h1 className="linear-title text-2xl md:text-3xl">Analytics</h1>
-
-                                <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--text-soft)]">
-                                    Operational analytics from stored platform records. No fake engagement or reach
-                                    numbers are shown.
-                                </p>
-                            </div>
+                    <div className="flex flex-wrap gap-3">
+                        <div className="flex rounded-full border border-[var(--chronos-line)] p-1">
+                            {rangeOptions.map((option) => (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    onClick={() => setRange(option.value)}
+                                    className={`chronos-button h-10 px-4 ${
+                                        range === option.value ? "" : "chronos-button-soft"
+                                    }`}
+                                >
+                                    {option.label}
+                                </button>
+                            ))}
                         </div>
 
-                        <div className="flex flex-col gap-2 sm:flex-row">
-                            <div className="flex rounded-md border border-[var(--border)] bg-[var(--canvas)] p-1">
-                                {rangeOptions.map((option) => (
-                                    <button
-                                        key={option.value}
-                                        type="button"
-                                        onClick={() => setRange(option.value)}
-                                        className={`h-8 rounded px-3 text-xs font-medium ${
-                                            range === option.value
-                                                ? "bg-[var(--surface-3)] text-[var(--text)] shadow-[var(--shadow-line)]"
-                                                : "text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]"
-                                        }`}
-                                    >
-                                        {option.label}
-                                    </button>
-                                ))}
-                            </div>
+                        <button
+                            type="button"
+                            onClick={loadAnalytics}
+                            disabled={refreshing}
+                            className="chronos-button chronos-button-soft"
+                        >
+                            {refreshing ? (
+                                <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
+                            ) : (
+                                <RefreshCw className="h-4 w-4" strokeWidth={1.75} />
+                            )}
+                            Refresh
+                        </button>
 
-                            <button
-                                type="button"
-                                onClick={loadAnalytics}
-                                disabled={refreshing}
-                                className="linear-button-secondary h-9"
-                            >
-                                {refreshing ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
-                                ) : (
-                                    <RefreshCw className="h-4 w-4" strokeWidth={1.5} />
-                                )}
-                                Refresh
-                            </button>
-
-                            <button type="button" onClick={exportCsv} className="linear-button-primary h-9">
-                                <Download className="h-4 w-4" strokeWidth={1.5} />
-                                Export CSV
-                            </button>
-                        </div>
+                        <button type="button" onClick={exportCsv} className="chronos-button">
+                            <Download className="h-4 w-4" strokeWidth={1.75} />
+                            Export
+                        </button>
                     </div>
                 </div>
 
-                <div className="grid border-b border-[var(--border)] md:grid-cols-6">
+                <div className="grid gap-px bg-[var(--chronos-line)] sm:grid-cols-2 xl:grid-cols-6">
                     <HeaderMetric label="Channels" value={totals.channels} />
-                    <HeaderMetric label="Social Posts" value={totals.socialPosts} />
-                    <HeaderMetric label="WA Messages" value={totals.whatsappMessages} />
+                    <HeaderMetric label="Output" value={totals.totalOutput} />
                     <HeaderMetric label="Completed" value={totals.totalCompleted} />
-                    <HeaderMetric label="In Progress" value={totals.totalInProgress} />
-                    <HeaderMetric label="Failures" value={totals.totalFailures} />
+                    <HeaderMetric label="Queued" value={totals.totalInProgress} />
+                    <HeaderMetric label="Failures" value={totals.totalFailures} danger={totals.totalFailures > 0} />
+                    <HeaderMetric label="Clean Rate" value={`${totals.cleanRate}%`} />
                 </div>
 
                 {notice && (
                     <div
-                        className={`mx-5 my-4 flex items-center gap-3 rounded-md border px-3 py-2 text-sm font-medium ${
+                        className={`m-4 flex items-start gap-3 rounded-[20px] border p-4 text-sm ${
                             notice.type === "success"
-                                ? "border-[rgba(34,197,94,0.24)] bg-[rgba(34,197,94,0.08)] text-[var(--success)]"
-                                : "border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] text-red-300"
+                                ? "border-[var(--chronos-olive)]/40 bg-[var(--chronos-olive)]/8 text-[var(--chronos-body)]"
+                                : "border-[var(--chronos-danger)]/40 bg-[var(--chronos-danger)]/5 text-[var(--chronos-danger)]"
                         }`}
                     >
                         {notice.type === "success" ? (
-                            <CheckCircle2 className="h-4 w-4" strokeWidth={1.5} />
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} />
                         ) : (
-                            <XCircle className="h-4 w-4" strokeWidth={1.5} />
+                            <XCircle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} />
                         )}
                         {notice.message}
                     </div>
                 )}
-            </div>
+            </section>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <MetricCard
-                    title="Connected Channels"
-                    value={totals.channels}
-                    text={`${socialAccounts.length} social, ${whatsAppAccounts.length} WhatsApp`}
-                    icon={Layers3}
-                />
-
-                <MetricCard
-                    title="Tracked Output"
-                    value={totals.socialPosts + totals.whatsappMessages}
-                    text="Social posts plus WhatsApp scheduled records"
+                    title="Social posts"
+                    value={totals.socialPosts}
+                    text={`${totals.socialPosted} posted · ${totals.socialFailed} failed`}
                     icon={Send}
+                    danger={totals.socialFailed > 0}
                 />
 
                 <MetricCard
-                    title="WhatsApp Contacts"
+                    title="WhatsApp"
+                    value={totals.whatsappMessages}
+                    text={`${totals.whatsappSent} sent · ${totals.whatsappFailed} failed`}
+                    icon={MessageCircle}
+                    danger={totals.whatsappFailed > 0}
+                />
+
+                <MetricCard
+                    title="Contacts"
                     value={totals.whatsappContacts}
-                    text={`${totals.whatsappTemplates} templates, ${totals.whatsappApprovedTemplates} approved`}
+                    text={`${totals.whatsappTemplates} templates · ${totals.whatsappApprovedTemplates} approved`}
                     icon={Users}
-                    success={totals.whatsappContacts > 0}
                 />
 
                 <MetricCard
-                    title="Failures"
-                    value={totals.totalFailures}
-                    text="Failed posts, messages, and failed WhatsApp API logs"
-                    icon={totals.totalFailures > 0 ? AlertTriangle : CheckCircle2}
-                    danger={totals.totalFailures > 0}
-                    success={totals.totalFailures === 0}
+                    title="API logs"
+                    value={`${totals.logSuccessRate}%`}
+                    text={`${totals.successfulLogs} successful · ${totals.failedLogs} failed`}
+                    icon={totals.failedLogs > 0 ? AlertTriangle : CheckCircle2}
+                    danger={totals.failedLogs > 0}
                 />
-            </div>
+            </section>
 
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
-                {insights.map((item) => (
-                    <InsightCard
-                        key={item.title}
-                        title={item.title}
-                        value={item.value}
-                        text={item.text}
-                        icon={item.icon}
-                    />
-                ))}
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-                <div className="linear-card overflow-hidden xl:col-span-2">
-                    <SectionHeader
-                        title="Activity Trend"
-                        text={`Social and WhatsApp activity for ${range === "all" ? "the latest tracked records" : `the last ${range} days`}.`}
-                    />
-
-                    <div className="h-[340px] p-4">
+            <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+                <Panel title="Activity trend" label={`${range === "all" ? "Latest records" : `${range} day range`}`}>
+                    <div className="h-[310px]">
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={trendData}>
                                 <defs>
                                     <linearGradient id="socialFill" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#5e6ad2" stopOpacity={0.35} />
-                                        <stop offset="95%" stopColor="#5e6ad2" stopOpacity={0} />
+                                        <stop offset="5%" stopColor="var(--chronos-olive)" stopOpacity={0.35} />
+                                        <stop offset="95%" stopColor="var(--chronos-olive)" stopOpacity={0} />
                                     </linearGradient>
+
                                     <linearGradient id="whatsappFill" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.32} />
-                                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                                        <stop offset="5%" stopColor="var(--chronos-olive-soft)" stopOpacity={0.28} />
+                                        <stop offset="95%" stopColor="var(--chronos-olive-soft)" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
 
-                                <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
+                                <CartesianGrid stroke="var(--chronos-line)" vertical={false} />
                                 <XAxis
                                     dataKey="date"
                                     axisLine={false}
                                     tickLine={false}
-                                    tick={{ fill: "var(--text-muted)", fontSize: 11 }}
+                                    tick={{ fill: "var(--chronos-muted)", fontSize: 11 }}
                                 />
                                 <YAxis
                                     axisLine={false}
                                     tickLine={false}
-                                    tick={{ fill: "var(--text-muted)", fontSize: 11 }}
+                                    tick={{ fill: "var(--chronos-muted)", fontSize: 11 }}
                                     allowDecimals={false}
                                 />
                                 <Tooltip content={<ChartTooltip />} />
                                 <Area
                                     type="monotone"
                                     dataKey="social"
-                                    name="Social posts"
-                                    stroke="#5e6ad2"
-                                    strokeWidth={2}
+                                    name="Social"
+                                    stroke="var(--chronos-olive)"
                                     fill="url(#socialFill)"
+                                    strokeWidth={2}
                                 />
                                 <Area
                                     type="monotone"
                                     dataKey="whatsapp"
-                                    name="WhatsApp messages"
-                                    stroke="#22c55e"
-                                    strokeWidth={2}
+                                    name="WhatsApp"
+                                    stroke="var(--chronos-olive-soft)"
                                     fill="url(#whatsappFill)"
+                                    strokeWidth={2}
                                 />
                                 <Area
                                     type="monotone"
                                     dataKey="failures"
                                     name="Failures"
-                                    stroke="#ef4444"
-                                    strokeWidth={2}
+                                    stroke="var(--chronos-danger)"
                                     fill="transparent"
+                                    strokeWidth={2}
                                 />
                             </AreaChart>
                         </ResponsiveContainer>
                     </div>
-                </div>
+                </Panel>
 
-                <div className="linear-card overflow-hidden">
-                    <SectionHeader
-                        title="Status Distribution"
-                        text="Combined social and WhatsApp operational status."
-                    />
-
+                <Panel title="Status mix" label="Current distribution">
                     {statusData.length === 0 ? (
-                        <EmptyState
-                            title="No status data"
-                            text="Create posts or WhatsApp messages to see distribution."
-                        />
+                        <EmptyState title="No status data" text="Create posts or messages to build distribution." />
                     ) : (
-                        <div className="p-4">
-                            <div className="h-[240px]">
+                        <div className="space-y-5">
+                            <div className="h-[220px]">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie
                                             data={statusData}
-                                            cx="50%"
-                                            cy="50%"
-                                            innerRadius={62}
-                                            outerRadius={92}
-                                            paddingAngle={4}
                                             dataKey="value"
+                                            nameKey="name"
+                                            innerRadius={58}
+                                            outerRadius={88}
+                                            paddingAngle={4}
                                         >
-                                            {statusData.map((_, index) => (
-                                                <Cell key={index} fill={chartColors[index % chartColors.length]} />
+                                            {statusData.map((item, index) => (
+                                                <Cell key={item.name} fill={chartColors[index % chartColors.length]} />
                                             ))}
                                         </Pie>
                                         <Tooltip content={<ChartTooltip />} />
@@ -897,152 +828,182 @@ export default function AnalyticsPage() {
 
                             <div className="space-y-2">
                                 {statusData.map((item, index) => (
-                                    <div
+                                    <LegendRow
                                         key={item.name}
-                                        className="flex items-center justify-between rounded-md border border-[var(--border)] bg-[var(--canvas)] px-3 py-2"
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <span
-                                                className="h-2.5 w-2.5 rounded-full"
-                                                style={{ backgroundColor: chartColors[index % chartColors.length] }}
-                                            />
-                                            <span className="text-sm font-medium text-[var(--text-soft)]">
-                                                {item.name}
-                                            </span>
-                                        </div>
-
-                                        <span className="text-sm font-semibold text-[var(--text)]">{item.value}</span>
-                                    </div>
+                                        label={item.name}
+                                        value={item.value}
+                                        color={chartColors[index % chartColors.length]}
+                                    />
                                 ))}
                             </div>
                         </div>
                     )}
-                </div>
-            </div>
+                </Panel>
+            </section>
 
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                <div className="linear-card overflow-hidden">
-                    <SectionHeader title="Platform Breakdown" text="Actual records grouped by platform." />
-
-                    <div className="h-[320px] p-4">
+            <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+                <Panel title="Platform breakdown" label="Accounts and records">
+                    <div className="h-[280px]">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={platformData}>
-                                <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
+                                <CartesianGrid stroke="var(--chronos-line)" vertical={false} />
                                 <XAxis
                                     dataKey="platform"
                                     axisLine={false}
                                     tickLine={false}
-                                    tick={{ fill: "var(--text-muted)", fontSize: 11 }}
+                                    tick={{ fill: "var(--chronos-muted)", fontSize: 11 }}
                                 />
                                 <YAxis
                                     axisLine={false}
                                     tickLine={false}
-                                    tick={{ fill: "var(--text-muted)", fontSize: 11 }}
+                                    tick={{ fill: "var(--chronos-muted)", fontSize: 11 }}
                                     allowDecimals={false}
                                 />
                                 <Tooltip content={<ChartTooltip />} />
-                                <Bar dataKey="total" name="Total records" fill="#5e6ad2" radius={[4, 4, 0, 0]} />
-                                <Bar dataKey="completed" name="Completed" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                                <Bar dataKey="failed" name="Failed" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="total" name="Total" fill="var(--chronos-olive)" radius={[8, 8, 0, 0]} />
+                                <Bar
+                                    dataKey="completed"
+                                    name="Completed"
+                                    fill="var(--chronos-olive-soft)"
+                                    radius={[8, 8, 0, 0]}
+                                />
+                                <Bar
+                                    dataKey="failed"
+                                    name="Failed"
+                                    fill="var(--chronos-danger)"
+                                    radius={[8, 8, 0, 0]}
+                                />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
 
-                    <div className="border-t border-[var(--border)]">
-                        <table className="w-full">
-                            <thead className="bg-[var(--canvas)]">
+                    <div className="mt-4 overflow-x-auto">
+                        <table className="w-full min-w-[620px] text-left">
+                            <thead className="border-b border-[var(--chronos-line)] text-xs uppercase tracking-[0.14em] text-[var(--chronos-muted)]">
                                 <tr>
-                                    <TableHead>Platform</TableHead>
-                                    <TableHead>Accounts</TableHead>
-                                    <TableHead>Total</TableHead>
-                                    <TableHead>Done</TableHead>
-                                    <TableHead>Failed</TableHead>
+                                    <th className="px-4 py-3 font-medium">Platform</th>
+                                    <th className="px-4 py-3 font-medium">Accounts</th>
+                                    <th className="px-4 py-3 font-medium">Total</th>
+                                    <th className="px-4 py-3 font-medium">Done</th>
+                                    <th className="px-4 py-3 font-medium">Failed</th>
                                 </tr>
                             </thead>
 
-                            <tbody className="divide-y divide-[var(--border)]">
+                            <tbody className="divide-y divide-[var(--chronos-line)]">
                                 {platformData.map((item) => (
-                                    <tr key={item.platform} className="hover:bg-[var(--surface-hover)]">
-                                        <td className="px-4 py-3 text-sm font-medium text-[var(--text)]">
+                                    <tr key={item.platform} className="transition hover:bg-[var(--chronos-olive)]/5">
+                                        <td className="px-4 py-3 text-sm font-medium text-[var(--chronos-ink)]">
                                             {item.platform}
                                         </td>
-                                        <td className="px-4 py-3 text-sm text-[var(--text-soft)]">{item.accounts}</td>
-                                        <td className="px-4 py-3 text-sm text-[var(--text-soft)]">{item.total}</td>
-                                        <td className="px-4 py-3 text-sm text-[var(--success)]">{item.completed}</td>
-                                        <td className="px-4 py-3 text-sm text-red-300">{item.failed}</td>
+                                        <td className="px-4 py-3 text-sm text-[var(--chronos-muted)]">
+                                            {item.accounts}
+                                        </td>
+                                        <td className="px-4 py-3 text-sm text-[var(--chronos-muted)]">{item.total}</td>
+                                        <td className="px-4 py-3 text-sm text-[var(--chronos-olive-soft)]">
+                                            {item.completed}
+                                        </td>
+                                        <td className="px-4 py-3 text-sm text-[var(--chronos-danger)]">
+                                            {item.failed}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
                     </div>
-                </div>
+                </Panel>
 
-                <div className="linear-card overflow-hidden">
-                    <SectionHeader
-                        title="Recent Activity"
-                        text="Latest records from social publishing and WhatsApp operations."
-                    />
+                <Panel title="Insights" label="Quick read">
+                    <div className="space-y-3">
+                        <InsightRow
+                            icon={TrendingUp}
+                            label="Busiest channel"
+                            value={platformData.slice().sort((a, b) => b.total - a.total)[0]?.platform || "N/A"}
+                            text={`${platformData.slice().sort((a, b) => b.total - a.total)[0]?.total || 0} tracked records`}
+                        />
 
-                    <div className="divide-y divide-[var(--border)]">
-                        {recentActivity.length === 0 ? (
-                            <EmptyState
-                                title="No activity yet"
-                                text="Activity appears after publishing posts or sending WhatsApp messages."
-                            />
-                        ) : (
-                            recentActivity.map((item) => <ActivityRow key={item.id} item={item} />)
-                        )}
+                        <InsightRow
+                            icon={FileText}
+                            label="Template health"
+                            value={`${totals.whatsappApprovedTemplates}/${totals.whatsappTemplates}`}
+                            text={`${totals.templateApprovalRate}% approval rate`}
+                        />
+
+                        <InsightRow
+                            icon={Calendar}
+                            label="Scheduled next"
+                            value={nextScheduledItems.length}
+                            text={nextScheduledItems.length > 0 ? "Upcoming queued work" : "No upcoming work"}
+                        />
+
+                        <InsightRow
+                            icon={CheckCircle2}
+                            label="Clean rate"
+                            value={`${totals.cleanRate}%`}
+                            text={totals.totalFailures > 0 ? "Failures need review" : "No failure pressure"}
+                        />
                     </div>
-                </div>
-            </div>
+                </Panel>
+            </section>
 
-            <div className="linear-card overflow-hidden">
-                <SectionHeader
-                    title="Upcoming Scheduled Work"
-                    text="The next queued posts and WhatsApp template messages."
-                />
-
-                <div className="divide-y divide-[var(--border)]">
-                    {nextScheduledItems.length === 0 ? (
+            <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+                <Panel title="Recent activity" label="Latest 10 records">
+                    {recentActivity.length === 0 ? (
                         <EmptyState
-                            title="No upcoming scheduled work"
-                            text="Schedule social posts or WhatsApp messages to see them here."
+                            title="No activity yet"
+                            text="Activity appears after publishing or sending WhatsApp messages."
                         />
                     ) : (
-                        nextScheduledItems.map((item) => (
-                            <div
-                                key={item.id}
-                                className="flex flex-col justify-between gap-3 px-4 py-3 transition-colors hover:bg-[var(--surface-hover)] md:flex-row md:items-center"
-                            >
-                                <div className="flex items-start gap-3">
-                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[rgba(94,106,210,0.28)] bg-[rgba(94,106,210,0.09)] text-[var(--accent)]">
-                                        <Clock className="h-4 w-4" strokeWidth={1.5} />
-                                    </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full min-w-[760px] text-left">
+                                <thead className="border-b border-[var(--chronos-line)] text-xs uppercase tracking-[0.14em] text-[var(--chronos-muted)]">
+                                    <tr>
+                                        <th className="px-4 py-3 font-medium">Item</th>
+                                        <th className="px-4 py-3 font-medium">Platform</th>
+                                        <th className="px-4 py-3 font-medium">Status</th>
+                                        <th className="px-4 py-3 font-medium">Time</th>
+                                    </tr>
+                                </thead>
 
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-[var(--text)]">{item.title}</h3>
-                                        <p className="mt-1 text-sm text-[var(--text-muted)]">{item.subtitle}</p>
-                                    </div>
-                                </div>
-
-                                <div className="text-left md:text-right">
-                                    <span className="linear-badge">{item.platform}</span>
-                                    <p className="mt-2 text-xs text-[var(--text-muted)]">{formatDateTime(item.time)}</p>
-                                </div>
-                            </div>
-                        ))
+                                <tbody className="divide-y divide-[var(--chronos-line)]">
+                                    {recentActivity.map((item, index) => (
+                                        <ActivityRow key={item.id} item={item} index={index} />
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     )}
-                </div>
-            </div>
+                </Panel>
+
+                <Panel title="Upcoming work" label="Next scheduled">
+                    {nextScheduledItems.length === 0 ? (
+                        <EmptyState
+                            title="No upcoming work"
+                            text="Schedule posts or WhatsApp messages to see them here."
+                        />
+                    ) : (
+                        <div className="divide-y divide-[var(--chronos-line)]">
+                            {nextScheduledItems.map((item) => (
+                                <UpcomingRow key={item.id} item={item} />
+                            ))}
+                        </div>
+                    )}
+                </Panel>
+            </section>
         </motion.div>
     );
 }
 
-function HeaderMetric({ label, value }: { label: string; value: number }) {
+function HeaderMetric({ label, value, danger }: { label: string; value: number | string; danger?: boolean }) {
     return (
-        <div className="border-r border-[var(--border)] px-5 py-4 last:border-r-0">
-            <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">{label}</p>
-            <p className="mt-1 text-2xl font-semibold tracking-[-0.04em] text-[var(--text)]">{value}</p>
+        <div className="bg-[var(--chronos-sheet)]/70 p-4">
+            <p className="chronos-label">{label}</p>
+            <p
+                className={`mt-2 text-3xl font-extralight tracking-[-0.07em] ${
+                    danger ? "text-[var(--chronos-danger)]" : "text-[var(--chronos-ink)]"
+                }`}
+            >
+                {value}
+            </p>
         </div>
     );
 }
@@ -1052,115 +1013,134 @@ function MetricCard({
     value,
     text,
     icon: Icon,
-    danger = false,
-    success = false,
+    danger,
 }: {
     title: string;
-    value: number;
+    value: number | string;
     text: string;
     icon: ElementType;
     danger?: boolean;
-    success?: boolean;
 }) {
-    const colorClass = danger
-        ? "border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.08)] text-red-300"
-        : success
-          ? "border-[rgba(34,197,94,0.22)] bg-[rgba(34,197,94,0.08)] text-[var(--success)]"
-          : "border-[rgba(94,106,210,0.28)] bg-[rgba(94,106,210,0.09)] text-[var(--accent)]";
-
     return (
-        <motion.div
-            whileHover={{ y: -1 }}
-            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-            className="linear-card p-4"
-        >
-            <div className="flex items-start justify-between gap-4">
-                <div>
-                    <p className="text-sm font-medium text-[var(--text-soft)]">{title}</p>
-                    <h3 className="mt-2 text-3xl font-semibold tracking-[-0.05em] text-[var(--text)]">{value}</h3>
-                    <p className="mt-2 text-xs leading-5 text-[var(--text-muted)]">{text}</p>
-                </div>
-
-                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md border ${colorClass}`}>
-                    <Icon className="h-5 w-5" strokeWidth={1.5} />
-                </div>
+        <div className="chronos-panel p-4">
+            <div className="mb-5 flex items-center justify-between gap-3">
+                <p className="chronos-label">{title}</p>
+                <Icon
+                    className={`h-4 w-4 ${danger ? "text-[var(--chronos-danger)]" : "text-[var(--chronos-olive)]"}`}
+                    strokeWidth={1.75}
+                />
             </div>
-        </motion.div>
+
+            <p className="text-3xl font-extralight tracking-[-0.07em] text-[var(--chronos-ink)]">{value}</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--chronos-muted)]">{text}</p>
+        </div>
     );
 }
 
-function InsightCard({
-    title,
+function Panel({ title, label, children }: { title: string; label: string; children: React.ReactNode }) {
+    return (
+        <div className="chronos-panel overflow-hidden">
+            <div className="border-b border-[var(--chronos-line)] px-4 py-3">
+                <p className="chronos-label">{label}</p>
+                <h2 className="mt-1 text-xl font-light tracking-[-0.05em] text-[var(--chronos-ink)]">{title}</h2>
+            </div>
+
+            <div className="p-4">{children}</div>
+        </div>
+    );
+}
+
+function LegendRow({ label, value, color }: { label: string; value: number; color: string }) {
+    return (
+        <div className="flex items-center justify-between gap-3 rounded-[18px] border border-[var(--chronos-line)] bg-[var(--chronos-olive)]/5 px-3 py-2">
+            <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />
+                <span className="text-sm text-[var(--chronos-muted)]">{label}</span>
+            </div>
+
+            <span className="text-sm font-medium text-[var(--chronos-ink)]">{value}</span>
+        </div>
+    );
+}
+
+function InsightRow({
+    icon: Icon,
+    label,
     value,
     text,
-    icon: Icon,
 }: {
-    title: string;
+    icon: ElementType;
+    label: string;
     value: string | number;
     text: string;
-    icon: ElementType;
 }) {
     return (
-        <div className="linear-card p-4">
-            <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-md border border-[rgba(94,106,210,0.28)] bg-[rgba(94,106,210,0.09)] text-[var(--accent)]">
-                <Icon className="h-4 w-4" strokeWidth={1.5} />
+        <div className="rounded-[20px] border border-[var(--chronos-line)] bg-[var(--chronos-olive)]/5 p-4">
+            <div className="flex items-start justify-between gap-3">
+                <div>
+                    <p className="chronos-label">{label}</p>
+                    <p className="mt-2 text-2xl font-extralight tracking-[-0.07em] text-[var(--chronos-ink)]">
+                        {value}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-[var(--chronos-muted)]">{text}</p>
+                </div>
+
+                <Icon className="h-5 w-5 shrink-0 text-[var(--chronos-olive)]" strokeWidth={1.75} />
             </div>
-
-            <p className="text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">{title}</p>
-
-            <h3 className="mt-2 text-xl font-semibold tracking-[-0.04em] text-[var(--text)]">{value}</h3>
-
-            <p className="mt-2 text-xs leading-5 text-[var(--text-muted)]">{text}</p>
         </div>
     );
 }
 
-function SectionHeader({ title, text }: { title: string; text: string }) {
+function ActivityRow({ item, index }: { item: ActivityItem; index: number }) {
     return (
-        <div className="border-b border-[var(--border)] bg-[var(--surface-hover)] px-4 py-3">
-            <h2 className="text-sm font-semibold text-[var(--text)]">{title}</h2>
-            <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">{text}</p>
-        </div>
+        <motion.tr
+            initial={{ opacity: 0, y: 8 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: index * 0.025 }}
+            className="transition hover:bg-[var(--chronos-olive)]/5"
+        >
+            <td className="px-4 py-3">
+                <p className="max-w-[360px] truncate text-sm font-medium text-[var(--chronos-ink)]">{item.title}</p>
+                <p className="mt-1 max-w-[360px] truncate text-xs text-[var(--chronos-muted)]">{item.subtitle}</p>
+            </td>
+
+            <td className="px-4 py-3 text-sm text-[var(--chronos-muted)]">{item.platform}</td>
+
+            <td className="px-4 py-3">
+                <span className={`chronos-pill ${getStatusClass(item.status)}`}>{item.status}</span>
+            </td>
+
+            <td className="px-4 py-3 text-xs uppercase tracking-[0.12em] text-[var(--chronos-muted)]">{item.time}</td>
+        </motion.tr>
     );
 }
 
-function TableHead({ children }: { children: React.ReactNode }) {
+function UpcomingRow({
+    item,
+}: {
+    item: {
+        id: string;
+        title: string;
+        subtitle: string;
+        time: string;
+        platform: string;
+    };
+}) {
     return (
-        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">
-            {children}
-        </th>
-    );
-}
+        <div className="flex items-start gap-3 p-4 transition hover:bg-[var(--chronos-olive)]/5">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--chronos-line-strong)] text-[var(--chronos-olive)]">
+                <Clock className="h-4 w-4" strokeWidth={1.75} />
+            </span>
 
-function ActivityRow({ item }: { item: ActivityItem }) {
-    return (
-        <div className="flex flex-col justify-between gap-3 px-4 py-3 transition-colors hover:bg-[var(--surface-hover)] md:flex-row md:items-center">
-            <div className="flex min-w-0 items-start gap-3">
-                <div
-                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md border ${
-                        item.platform === "WhatsApp"
-                            ? "border-[rgba(34,197,94,0.22)] bg-[rgba(34,197,94,0.08)] text-[var(--success)]"
-                            : "border-[rgba(94,106,210,0.28)] bg-[rgba(94,106,210,0.09)] text-[var(--accent)]"
-                    }`}
-                >
-                    {item.platform === "WhatsApp" ? (
-                        <MessageCircle className="h-4 w-4" strokeWidth={1.5} />
-                    ) : (
-                        <Send className="h-4 w-4" strokeWidth={1.5} />
-                    )}
+            <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-[var(--chronos-ink)]">{item.title}</p>
+                <p className="mt-1 truncate text-xs text-[var(--chronos-muted)]">{item.subtitle}</p>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="chronos-pill">{item.platform}</span>
+                    <span className="text-xs text-[var(--chronos-muted)]">{formatDateTime(item.time)}</span>
                 </div>
-
-                <div className="min-w-0">
-                    <h3 className="truncate text-sm font-semibold text-[var(--text)]">{item.title}</h3>
-                    <p className="mt-1 line-clamp-2 text-sm leading-5 text-[var(--text-soft)]">{item.subtitle}</p>
-                    <p className="mt-1 text-xs text-[var(--text-muted)]">{item.time}</p>
-                </div>
-            </div>
-
-            <div className="flex shrink-0 items-center gap-2">
-                <span className="linear-badge">{item.platform}</span>
-
-                <span className={`linear-badge uppercase ${getStatusClass(item.status)}`}>{item.status}</span>
             </div>
         </div>
     );
@@ -1168,56 +1148,31 @@ function ActivityRow({ item }: { item: ActivityItem }) {
 
 function EmptyState({ title, text }: { title: string; text: string }) {
     return (
-        <div className="px-6 py-12 text-center">
-            <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--canvas)] text-[var(--text-muted)]">
-                <Activity className="h-5 w-5" strokeWidth={1.5} />
-            </div>
-
-            <h3 className="text-sm font-semibold text-[var(--text)]">{title}</h3>
-
-            <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-[var(--text-muted)]">{text}</p>
+        <div className="rounded-[20px] border border-[var(--chronos-line)] bg-[var(--chronos-olive)]/5 p-6 text-center">
+            <p className="text-sm font-medium text-[var(--chronos-ink)]">{title}</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--chronos-muted)]">{text}</p>
         </div>
     );
 }
 
-function ChartTooltip({
-    active,
-    payload,
-    label,
-}: {
-    active?: boolean;
-    payload?: Array<{
-        name?: string;
-        value?: number;
-        color?: string;
-        payload?: {
-            name?: string;
-        };
-    }>;
-    label?: string;
-}) {
-    if (!active || !payload || payload.length === 0) {
+function ChartTooltip({ active, payload, label }: any) {
+    if (!active || !payload?.length) {
         return null;
     }
 
     return (
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-3)] px-3 py-2 shadow-[var(--shadow-panel)]">
-            {label && <p className="mb-2 text-xs font-medium text-[var(--text-muted)]">{label}</p>}
+        <div className="rounded-[18px] border border-[var(--chronos-line-strong)] bg-[var(--chronos-sheet)]/95 p-3 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+            {label && (
+                <p className="mb-2 text-xs font-medium uppercase tracking-[0.14em] text-[var(--chronos-muted)]">
+                    {label}
+                </p>
+            )}
 
-            <div className="space-y-1.5">
-                {payload.map((item, index) => (
-                    <div key={index} className="flex items-center justify-between gap-6">
-                        <div className="flex items-center gap-2">
-                            <span
-                                className="h-2 w-2 rounded-full"
-                                style={{ backgroundColor: item.color || chartColors[index % chartColors.length] }}
-                            />
-                            <span className="text-xs text-[var(--text-soft)]">
-                                {item.name || item.payload?.name || "Value"}
-                            </span>
-                        </div>
-
-                        <span className="text-xs font-semibold text-[var(--text)]">{item.value}</span>
+            <div className="space-y-1">
+                {payload.map((item: any) => (
+                    <div key={item.name} className="flex items-center justify-between gap-6 text-xs">
+                        <span style={{ color: item.color }}>{item.name}</span>
+                        <span className="text-[var(--chronos-ink)]">{item.value}</span>
                     </div>
                 ))}
             </div>
