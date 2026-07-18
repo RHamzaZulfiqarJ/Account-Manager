@@ -1,90 +1,99 @@
 <div align="center">
 
-# MIMICO
+# 🪄 MIMICO
+### AI-Powered Social Media Management Platform
 
-**AI-Powered Social Media Management Platform**
+A centralized, AI-assisted workspace for creators, businesses, and teams to compose, refine, schedule, and publish content across multiple social platforms — including WhatsApp Business — from one controlled dashboard.
 
-Social publishing with cinematic control.
-
-[Live Demo](https://www.mimico.live) · [Report Bug](#) · [Request Feature](#)
+![Next.js](https://img.shields.io/badge/Next.js-16-black)
+![React](https://img.shields.io/badge/React-19-61DAFB)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)
+![Prisma](https://img.shields.io/badge/Prisma-7-2D3748)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-336791)
+![Gemini](https://img.shields.io/badge/Gemini-2.5%20Flash-orange)
+![TailwindCSS](https://img.shields.io/badge/TailwindCSS-4-06B6D4)
+![Docker](https://img.shields.io/badge/Deployment-Vercel%20%2F%20Supabase-000000)
 
 </div>
 
 ---
 
-## Overview
+# 📖 Overview
 
-MIMICO is a centralized, AI-assisted workspace for creators, businesses, and teams to compose, refine, schedule, and publish content across multiple social platforms — including WhatsApp Business — from a single controlled dashboard.
+MIMICO is a production-grade social media management platform built to eliminate the friction of manual, multi-platform publishing.
 
-Managing social media manually breaks down fast once more than one platform is involved: every channel has its own tone, character limits, and posting rhythm, and tracking what's queued, scheduled, or failed becomes a full-time job on its own. MIMICO solves this by combining platform integration, an AI content studio, and a visual publishing calendar into one guided workflow — from idea to delivery.
-
----
-
-## Table of Contents
-
-- [Key Features](#key-features)
-- [AI / NLP Engine](#ai--nlp-engine)
-- [Tech Stack](#tech-stack)
-- [System Architecture](#system-architecture)
-- [Database Design](#database-design)
-- [Publishing Workflow](#publishing-workflow)
-- [Getting Started](#getting-started)
-- [Security](#security)
-- [Roadmap](#roadmap)
-- [License](#license)
+Every social channel has its own tone, character limits, and posting rhythm — managing that manually across accounts means constant tool-switching, rewritten captions, and lost track of what's queued, scheduled, or failed. MIMICO solves this by combining OAuth-based platform integration, an AI content studio powered by Gemini, and a visual publishing calendar into one guided workflow, from idea to delivery.
 
 ---
 
-## Key Features
+# ✨ Features
 
-### Account & Publishing Management
-- **Secure Authentication** — signup, login, logout, password reset, and JWT-based session handling
-- **Social Account Connection** — OAuth-based linking for Twitter/X, Threads, Mastodon, and WhatsApp Business
-- **Post Composer** — a focused editor for writing, selecting target accounts, and previewing platform limits
-- **Publishing Calendar** — visual scheduling with queued, scheduled, posted, and failed post tracking
-- **Search, Filters & Management** — full post lifecycle management across table and calendar views
-
-### AI Content Studio
-- **AI Caption Generator** — converts a rough idea into a ready-to-publish caption
-- **Grammar Improvement** — corrects spelling, punctuation, and sentence flow while preserving intent
-- **Tone Rewrite** — reframes content as professional, friendly, casual, confident, persuasive, funny, or simple
-- **Hashtag Generator** — produces relevant, non-spammy hashtag sets within platform limits
-- **Platform-Specific Rewrite** — adapts style and length per selected platform
-- **Post Score** — evaluates clarity, length, readability, and platform fit before publishing
-- **Event-Based Suggestions** — timely content ideas driven by dates, topics, and campaigns
-
-### WhatsApp Business
-- Templates, contacts, and scheduled message delivery
-- Delivery logs and message status tracking alongside social workflows
-
-### Experience
-- Fully responsive across desktop, tablet, and mobile
-- Light and dark theme support
-- Smooth, animated micro-interactions for a polished SaaS feel
+- 🔐 Secure Authentication (JWT + OAuth)
+- 🔗 Multi-Platform Account Connection (Twitter/X, Threads, Mastodon, WhatsApp Business)
+- ✍️ AI Caption Generator
+- 📝 Grammar Improvement Engine
+- 🎭 Tone Rewrite (7 styles)
+- #️⃣ Hashtag Generator
+- 🔄 Platform-Specific Content Rewriting
+- 📊 AI Post Score (readiness & engagement scoring)
+- 📅 Event-Based Content Suggestions
+- 🗓️ Visual Publishing Calendar
+- 💬 WhatsApp Business Templates & Delivery Logs
+- 🌓 Light / Dark Theme
+- 📱 Fully Responsive Dashboard
 
 ---
 
-## AI / NLP Engine
+# 🏗️ System Architecture
 
-MIMICO's AI layer receives structured input — an idea or draft, tone preference, target platforms, and event/date context — and returns a structured, editable response inserted directly into the composer. The user always stays in the loop; nothing is auto-published without review.
+```
+                   +------------------+
+                   |  Next.js Frontend|
+                   +--------+---------+
+                            |
+                     REST API Requests
+                            |
+                            ▼
+                   +------------------+
+                   |    API Routes    |
+                   +--------+---------+
+                            |
+       +--------------------+---------------------+
+       |                    |                      |
+       ▼                    ▼                      ▼
+ PostgreSQL /         Gemini AI / NLP        Social Platform APIs
+ Supabase (Prisma)      Engine                + OAuth Providers
+       |                    |                      |
+       +--------------------+----------------------+
+                            |
+                            ▼
+                     Cron Scheduler
+                (queued & scheduled posts)
+```
+
+---
+
+# 🧠 AI / NLP Engine
+
+MIMICO's AI layer receives structured input — an idea or draft, tone preference, target platforms, and event/date context — and returns a structured, editable response inserted directly into the composer. Nothing is auto-published without human review.
 
 ```
 User Draft / Idea
-      │
-      ▼
-AI Request Layer  ───▶  validation, rate limits, action type
-      │
-      ▼
-Gemini / NLP Engine  ───▶  caption, grammar, tone, hashtags, event suggestions
-      │
-      ▼
-Structured Result  ───▶  JSON response returned to composer
-      │
-      ▼
-Human Review  ───▶  accept, edit, schedule, or publish
+        │
+        ▼
+AI Request Layer   → validation, rate limits, action type
+        │
+        ▼
+Gemini 2.5 Flash    → caption, grammar, tone, hashtags, event suggestions
+        │
+        ▼
+Structured Result   → JSON response returned to composer
+        │
+        ▼
+Human Review        → accept, edit, schedule, or publish
 ```
 
-**Capabilities implemented:**
+**Implemented capabilities:**
 - Caption generation from short-form ideas
 - Grammar correction with intent preservation
 - Tone transformation across seven styles
@@ -95,7 +104,7 @@ Human Review  ───▶  accept, edit, schedule, or publish
 
 **Planned:**
 - Sentiment analysis
-- Trend detection and audience targeting
+- Trend detection & audience targeting
 - Auto-reply suggestions
 - Content performance prediction
 - Brand voice memory across campaigns
@@ -103,61 +112,47 @@ Human Review  ───▶  accept, edit, schedule, or publish
 
 ---
 
-## Tech Stack
+# 🛠️ Tech Stack
 
-| Layer | Technology |
-|---|---|
-| **Frontend** | Next.js 16, React 19 |
-| **Language** | TypeScript |
-| **Styling** | Tailwind CSS 4, MUI, Lucide, React Icons |
-| **Animation** | Framer Motion, Three.js |
-| **Backend** | Next.js API Routes / Node.js runtime |
-| **Database / ORM** | Prisma 7 with PostgreSQL / Supabase PostgreSQL |
-| **AI / NLP** | `@google/genai` — Gemini 2.5 Flash |
-| **Authentication** | JWT (cookie-based), bcrypt, OAuth |
-| **Validation** | Zod |
-| **Scheduling** | Cron routes / node-cron |
-| **Deployment** | Vercel / Render / Supabase |
+## Frontend
 
----
+- Next.js 16
+- React 19
+- TypeScript
+- Tailwind CSS 4
+- MUI, Lucide, React Icons
+- Framer Motion, Three.js
 
-## System Architecture
+## Backend
 
-MIMICO follows a layered web application architecture. The Next.js frontend renders the dashboard, composer, and calendar; API routes handle authentication, OAuth callbacks, AI requests, scheduling, and publishing actions; Prisma connects the service layer to PostgreSQL (or Supabase). External integrations cover social platform APIs, OAuth providers, and the AI/NLP engine.
+- Next.js API Routes / Node.js Runtime
+- Zod (schema validation)
+- Cron routes / node-cron (scheduling)
 
-```
-User Interface
-      │
-      ▼
-Next.js Frontend
-      │
-      ▼
-API Routes
-      │
-      ▼
-Service Layer
-      │
-      ├──▶ PostgreSQL / Supabase
-      ├──▶ OAuth Providers
-      ├──▶ Gemini AI / NLP
-      ├──▶ Cron Scheduler
-      └──▶ Social Platform APIs
-```
+## Database / ORM
+
+- Prisma 7
+- PostgreSQL / Supabase PostgreSQL
+
+## AI / NLP
+
+- `@google/genai`
+- Gemini 2.5 Flash
+
+## Authentication
+
+- JWT (cookie-based sessions)
+- bcrypt
+- OAuth (Twitter/X, Threads, Mastodon, WhatsApp Business)
+
+## Deployment
+
+- Vercel / Render
+- Supabase
 
 ---
 
-## Database Design
-
-Core entities are modeled in Prisma with relational integrity, indexing, and cascade rules for reliable account ownership and efficient retrieval.
-
-| Entity | Purpose |
-|---|---|
-| **Users** | Application users, credentials/OAuth details, password reset data, ownership relations |
-| **Social Accounts** | Platform identity, access/refresh tokens, expiry, status, business metadata |
-| **Scheduled Posts** | Content, schedule time, status, retry count, error/failure metadata |
-| **WhatsApp Contacts** | Contact records tied to a user and connected social account |
-| **WhatsApp Scheduled Messages** | Template, recipient, schedule time, delivery status, Meta message ID |
-| **WhatsApp Message Log** | Message direction, payload, response, status code, success/error state |
+# 🗄️ Database Design
 
 ```
 User ──< SocialAccount ──< ScheduledPost
@@ -166,11 +161,107 @@ User ──< SocialAccount ──< ScheduledPost
   └──< WhatsAppContact
 ```
 
-Sensitive tokens and identifiers are isolated in controlled entities and protected via environment configuration rather than hardcoded values.
+| Entity | Purpose |
+|---|---|
+| **Users** | Credentials/OAuth details, password reset data, ownership relations |
+| **Social Accounts** | Platform identity, access/refresh tokens, expiry, status |
+| **Scheduled Posts** | Content, schedule time, status, retry count, error metadata |
+| **WhatsApp Contacts** | Contact records tied to a user and connected account |
+| **WhatsApp Scheduled Messages** | Template, recipient, schedule time, delivery status |
+| **WhatsApp Message Log** | Message direction, payload, response, status, success/error state |
 
 ---
 
-## Publishing Workflow
+# 📂 Project Structure
+
+```
+Mimico
+│
+├── app/                  # Next.js app router (dashboard, composer, calendar)
+├── components/           # Reusable UI components
+├── lib/                  # DB client, AI helpers, utilities
+├── prisma/
+│   ├── schema.prisma
+│   └── migrations/
+├── api/ (or app/api/)    # Auth, OAuth, AI, posts, cron routes
+├── public/               # Static assets
+└── docker-compose.yml
+```
+
+---
+
+# 🚀 Installation
+
+## Clone Repository
+
+```bash
+git clone https://github.com/RHamzaZulfiqarJ/Mimico.git
+
+cd Mimico
+```
+
+---
+
+## Install Dependencies
+
+```bash
+npm install
+```
+
+---
+
+## Configure Environment
+
+Create a `.env` file in the project root:
+
+```env
+# Database
+DATABASE_URL="postgresql://user:password@localhost:5432/mimico"
+
+# Auth
+JWT_SECRET=""
+NEXTAUTH_URL="http://localhost:3000"
+
+# OAuth
+TWITTER_CLIENT_ID=""
+TWITTER_CLIENT_SECRET=""
+THREADS_CLIENT_ID=""
+THREADS_CLIENT_SECRET=""
+MASTODON_CLIENT_ID=""
+MASTODON_CLIENT_SECRET=""
+WHATSAPP_BUSINESS_API_KEY=""
+
+# AI
+GEMINI_API_KEY=""
+```
+
+---
+
+## Setup Database
+
+```bash
+npx prisma generate
+
+npx prisma migrate dev
+```
+
+---
+
+# ▶ Run Development Server
+
+```bash
+npm run dev
+```
+
+App:
+
+```
+http://localhost:3000
+```
+
+---
+
+# 🗓️ Publishing Workflow
 
 | Step | Action |
 |---|---|
@@ -184,65 +275,24 @@ Sensitive tokens and identifiers are isolated in controlled entities and protect
 
 ---
 
-## Getting Started
+# 📸 Screenshots
 
-### Prerequisites
-- Node.js (LTS)
-- PostgreSQL instance (local or Supabase-hosted)
-- API credentials for each platform integration (Twitter/X, Threads, Mastodon, WhatsApp Business)
-- Google GenAI (Gemini) API key
+Add screenshots here.
 
-### Installation
-
-```bash
-git clone https://github.com/RHamzaZulfiqarJ/Mimico.git
-cd Mimico
-npm install
 ```
+screenshots/
 
-### Environment Variables
-
-Create a `.env` file in the project root:
-
-```env
-# Database
-DATABASE_URL="postgresql://user:password@localhost:5432/mimico"
-
-# Auth
-JWT_SECRET=""
-NEXTAUTH_URL="http://localhost:3000"
-
-# OAuth — per platform
-TWITTER_CLIENT_ID=""
-TWITTER_CLIENT_SECRET=""
-THREADS_CLIENT_ID=""
-THREADS_CLIENT_SECRET=""
-MASTODON_CLIENT_ID=""
-MASTODON_CLIENT_SECRET=""
-WHATSAPP_BUSINESS_API_KEY=""
-
-# AI
-GEMINI_API_KEY=""
+├── dashboard.png
+├── composer.png
+├── ai-studio.png
+├── calendar.png
+├── whatsapp.png
+└── settings.png
 ```
-
-### Database Setup
-
-```bash
-npx prisma generate
-npx prisma migrate dev
-```
-
-### Run Locally
-
-```bash
-npm run dev
-```
-
-The app will be available at `http://localhost:3000`.
 
 ---
 
-## Security
+# 🔐 Security
 
 - Password hashing via **bcrypt**, session handling via **JWT cookies**
 - **OAuth**-based account connections with per-platform token isolation
@@ -254,36 +304,20 @@ The app will be available at `http://localhost:3000`.
 
 ---
 
-## Advantages & Limitations
+# 🎯 Future Improvements
 
-**Advantages**
-- Centralized control across all connected accounts
-- Meaningful reduction in manual writing and publishing effort
-- AI-assisted content improves consistency and quality
-- Scalable foundation for a full social publishing product
-
-**Limitations**
-- Subject to third-party platform API rate limits and approval requirements
-- Dependent on external AI and social platform availability
-- AI-generated content requires human review before publishing
-- Some integrations may require business verification
+- Analytics dashboard with post performance charts
+- AI-generated content calendar (weekly/monthly planning)
+- Team collaboration, roles, and approval workflows
+- Sentiment analysis and trend detection
+- Auto-reply suggestions for comments and DMs
+- Audience targeting and competitor analysis
+- Additional platform integrations (LinkedIn, Instagram, Bluesky)
+- Native mobile app
 
 ---
 
-## Roadmap
-
-- [ ] Analytics dashboard with post performance charts
-- [ ] AI-generated content calendar (weekly/monthly planning)
-- [ ] Team collaboration, roles, and approval workflows
-- [ ] Sentiment analysis and trend detection
-- [ ] Auto-reply suggestions for comments and DMs
-- [ ] Audience targeting and competitor analysis
-- [ ] Additional platform integrations (LinkedIn, Instagram, Bluesky)
-- [ ] Native mobile app
-
----
-
-## License
+# 📜 License
 
 Specify your license here (e.g., MIT).
 
@@ -291,6 +325,10 @@ Specify your license here (e.g., MIT).
 
 <div align="center">
 
-Built by **Hamza Zulfiqar** and **Zafra Noor Ejaz**
+### ⭐ If you like this project, consider giving it a star!
+
+Made with ❤️ using Next.js, Prisma, PostgreSQL & Gemini AI.
+
+**Developed by [Hamza Zulfiqar](https://github.com/RHamzaZulfiqarJ)**
 
 </div>
